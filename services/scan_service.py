@@ -6,8 +6,24 @@ from typing import Any
 from scanner.blablacar_parser import parse_search_text
 from scanner.mhtml_reader import read_mhtml_bytes
 from scanner.validator import validar_busca_publica
+from rules.concorrencia_data import analisar_concorrencia_por_data
 from rules.motor_decisao import decidir_acao
 from utils.datas import hoje_iso
+
+
+def _aplicar_link_manual_publico(parsed: dict[str, Any], link_publico_manual: str | None) -> dict[str, Any]:
+    """Usa o link público informado quando a captura não preserva a URL da busca."""
+    link_publico_manual = (link_publico_manual or "").strip()
+    if not link_publico_manual:
+        return parsed
+
+    manual = asdict(parse_search_text(link_publico_manual))
+    parsed["link_busca"] = parsed.get("link_busca") or manual.get("link_busca") or link_publico_manual
+
+    for campo in ("origem", "destino", "data_viagem"):
+        parsed[campo] = parsed.get(campo) or manual.get(campo)
+
+    return parsed
 
 
 def analisar_arquivo_mhtml(
@@ -19,15 +35,25 @@ def analisar_arquivo_mhtml(
     conta: str,
     sentido: str | None = None,
     horario_planejado: str | None = None,
+    link_publico_manual: str | None = None,
 ) -> dict[str, Any]:
     conteudo = read_mhtml_bytes(raw_bytes)
     parsed_obj = parse_search_text(conteudo.html + "\n" + conteudo.text)
     parsed = asdict(parsed_obj)
     parsed["motoristas"] = [m.to_dict() for m in parsed_obj.motoristas]
+    parsed = _aplicar_link_manual_publico(parsed, link_publico_manual)
 
     validacao_obj = validar_busca_publica(parsed, origem_esperada, destino_esperado, data_esperada)
     validacao = asdict(validacao_obj)
     decisao = decidir_acao(parsed, validacao, conta, horario_planejado)
+    concorrencia = analisar_concorrencia_por_data(
+        parsed=parsed,
+        origem=parsed.get("origem") or origem_esperada,
+        destino=parsed.get("destino") or destino_esperado,
+        data=parsed.get("data_viagem") or data_esperada,
+    )
+    if validacao.get("valido"):
+        concorrencia["status_validacao"] = validacao.get("status")
 
     scan = {
         "created_at": hoje_iso(),
@@ -46,5 +72,6 @@ def analisar_arquivo_mhtml(
         "parsed": parsed,
         "validacao": validacao,
         "decisao": decisao,
+        "concorrencia": concorrencia,
         "motoristas": parsed.get("motoristas", []),
     }
