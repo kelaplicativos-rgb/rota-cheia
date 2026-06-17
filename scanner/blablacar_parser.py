@@ -33,7 +33,7 @@ class ParsedSearch:
 
 
 URL_RE = re.compile(r"https?://[^\s\"'<>]+blablacar\.com\.br[^\s\"'<>]+", re.IGNORECASE)
-TIME_RE = re.compile(r"\b([01]?\d|2[0-3]):[0-5]\d\b")
+TIME_RE = re.compile(r"\b(?:[01]?\d|2[0-3]):[0-5]\d\b")
 PRICE_RE = re.compile(r"R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+)")
 
 STATUS_TERMS = [
@@ -98,8 +98,7 @@ def _extract_driver_offers(texto: str) -> list[DriverOffer]:
         for contexto in _contexts_around(joined, nome_alvo):
             offers.append(_offer_from_context(nome_alvo, contexto))
 
-    # Heurística básica para concorrentes: blocos com horário + preço.
-    blocos = re.split(r"(?=\b[01]?\d|2[0-3]:[0-5]\d\b)", joined)
+    blocos = re.split(r"(?=\b(?:[01]?\d|2[0-3]):[0-5]\d\b)", joined)
     for bloco in blocos:
         if "R$" not in bloco:
             continue
