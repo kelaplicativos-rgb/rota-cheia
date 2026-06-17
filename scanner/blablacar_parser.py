@@ -66,10 +66,18 @@ def _extract_link(texto: str) -> str | None:
     if not matches:
         return None
     preferidos = [url for url in matches if "/search" in url or "/carpool" in url]
-    return unquote_plus((preferidos or matches)[0])
+    return _normalizar_url((preferidos or matches)[0])
+
+
+def _normalizar_url(link: str | None) -> str | None:
+    if not link:
+        return None
+    link_limpo = str(link).replace("&amp;", "&").replace("\\u0026", "&")
+    return unquote_plus(link_limpo)
 
 
 def _extract_route_from_link(link: str | None) -> tuple[str | None, str | None, str | None]:
+    link = _normalizar_url(link)
     if not link:
         return None, None, None
     try:
