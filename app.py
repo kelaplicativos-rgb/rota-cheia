@@ -81,6 +81,12 @@ def render_concorrencia(concorrencia: dict) -> None:
         st.warning("Nenhum carro cheio/quase cheio detectado ainda.")
 
 
+def render_falha_controlada(exc: Exception) -> None:
+    st.error(STATUS_NAO_VALIDADO)
+    st.warning(f"Falha técnica controlada: {exc}")
+    st.info("Use a aba Fallback Técnico com o arquivo .mht/.mhtml salvo da busca pública por rota + data.")
+
+
 st.title("Rota Cheia")
 st.caption("Inteligência de captação de passageiros para escolher datas, horários e validar concorrência pública.")
 
@@ -178,7 +184,7 @@ with aba_scan:
                 scan_id = save_scan(resultado["scan"], resultado["motoristas"], resultado["decisao"])
                 st.success(f"Scanner salvo no histórico com ID {scan_id}.")
         except Exception as exc:
-            st.exception(exc)
+            render_falha_controlada(exc)
     elif not escolha:
         st.warning("Gere as datas na aba Inteligência de Captação primeiro.")
 
@@ -213,7 +219,7 @@ with aba_fallback:
             render_concorrencia(resultado["concorrencia"])
             render_decisao(resultado["decisao"])
         except Exception as exc:
-            st.exception(exc)
+            render_falha_controlada(exc)
 
 with aba_agenda:
     st.header("Agenda operacional padrão")
