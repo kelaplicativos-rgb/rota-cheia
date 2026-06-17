@@ -6,12 +6,13 @@ from typing import Any
 from scanner.blablacar_parser import parse_search_text
 from scanner.mhtml_reader import read_mhtml_bytes
 from scanner.validator import validar_busca_publica
+from rules.concorrencia_data import analisar_concorrencia_por_data
 from rules.motor_decisao import decidir_acao
 from utils.datas import hoje_iso
 
 
 def _aplicar_link_manual_publico(parsed: dict[str, Any], link_publico_manual: str | None) -> dict[str, Any]:
-    """Usa o link público informado na tela quando o MHTML não preserva a URL da busca."""
+    """Usa o link público informado quando a captura não preserva a URL da busca."""
     link_publico_manual = (link_publico_manual or "").strip()
     if not link_publico_manual:
         return parsed
@@ -45,6 +46,14 @@ def analisar_arquivo_mhtml(
     validacao_obj = validar_busca_publica(parsed, origem_esperada, destino_esperado, data_esperada)
     validacao = asdict(validacao_obj)
     decisao = decidir_acao(parsed, validacao, conta, horario_planejado)
+    concorrencia = analisar_concorrencia_por_data(
+        parsed=parsed,
+        origem=parsed.get("origem") or origem_esperada,
+        destino=parsed.get("destino") or destino_esperado,
+        data=parsed.get("data_viagem") or data_esperada,
+    )
+    if validacao.get("valido"):
+        concorrencia["status_validacao"] = validacao.get("status")
 
     scan = {
         "created_at": hoje_iso(),
@@ -63,5 +72,6 @@ def analisar_arquivo_mhtml(
         "parsed": parsed,
         "validacao": validacao,
         "decisao": decisao,
+        "concorrencia": concorrencia,
         "motoristas": parsed.get("motoristas", []),
     }
