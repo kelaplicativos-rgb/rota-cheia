@@ -36,42 +36,41 @@ STATUS_NAO_VALIDADO = "não confirmado / busca pública por data não validada"
 
 FLUXO_SEGURO_APK = [
     {
-        "etapa": "Busca pública",
-        "uso no sistema": "Gerar/abrir link público com origem, destino, data exata e assentos.",
-        "regra": "Começar pelo carpool público; sem busca por data não há recomendação operacional.",
+        "etapa": "Inteligência de captação",
+        "uso no sistema": "Usuário informa origem e destino; o sistema gera ranking de datas futuras.",
+        "regra": "Não recomendar ação operacional antes da validação pública por rota e data.",
     },
     {
-        "etapa": "Resultados",
-        "uso no sistema": "Ler motoristas, horários, preços, vagas e status cheio/quase cheio.",
-        "regra": "Procurar apenas Ezequiel S e Barbosa como identificadores próprios.",
+        "etapa": "Eventos regionais",
+        "uso no sistema": "Eventos aumentam a pontuação das datas próximas à região definida.",
+        "regra": "Sábado à noite só ganha força quando houver demanda ou evento relevante.",
     },
     {
-        "etapa": "Detalhe da carona",
-        "uso no sistema": "Guardar contexto público de passageiros/localidades quando o arquivo enviado trouxer esse dado.",
-        "regra": "Não depender de login, token, pagamento ou API privada do app.",
+        "etapa": "Scanner da data escolhida",
+        "uso no sistema": "Executar busca pública interna para ler motoristas, horários, preços e lotação.",
+        "regra": "O fluxo principal não depende de link digitado nem arquivo manual.",
     },
     {
-        "etapa": "Decisão",
-        "uso no sistema": "Retornar CRIAR, MANTER, ALTERAR HORÁRIO, ALTERAR PREÇO, ALTERAR DESTINO FINAL ou EXCLUIR.",
-        "regra": "Nunca criar duplicado quando Ezequiel S ou Barbosa já aparecerem na rota/data.",
+        "etapa": "Ranking da concorrência",
+        "uso no sistema": "Mostrar horários fortes, destinos cotados, motoristas mais cheios e faixa de preço.",
+        "regra": "A decisão usa apenas dados validados na busca pública da data.",
     },
     {
-        "etapa": "Conflito",
-        "uso no sistema": "Bloquear conflito entre Ezequiel S e Barbosa em Três Corações no mesmo dia.",
-        "regra": "Se uma conta estiver em Três Corações, a outra não deve publicar/ir para lá no mesmo dia.",
+        "etapa": "Fallback técnico",
+        "uso no sistema": "Importação manual somente quando o scanner público falhar.",
+        "regra": "Fallback não faz parte do fluxo principal do usuário.",
     },
 ]
 
 CAMPOS_SCAN_PUBLICO = [
-    {"campo": "link_busca", "origem": "URL pública", "obrigatório": "sim"},
-    {"campo": "origem", "origem": "query fn / texto público", "obrigatório": "sim"},
-    {"campo": "destino", "origem": "query tn / texto público", "obrigatório": "sim"},
-    {"campo": "data_viagem", "origem": "query db / texto público", "obrigatório": "sim"},
-    {"campo": "motoristas", "origem": "resultado público", "obrigatório": "sim"},
-    {"campo": "horários", "origem": "resultado público", "obrigatório": "quando detectado"},
-    {"campo": "preços", "origem": "resultado público", "obrigatório": "quando detectado"},
-    {"campo": "status cheio/quase cheio", "origem": "resultado público", "obrigatório": "quando detectado"},
-    {"campo": "passageiros/localidades", "origem": "detalhe público salvo em MHTML", "obrigatório": "quando disponível"},
+    {"campo": "origem", "origem": "usuário", "obrigatório": "sim"},
+    {"campo": "destino", "origem": "usuário", "obrigatório": "sim"},
+    {"campo": "datas futuras", "origem": "inteligência de captação", "obrigatório": "sim"},
+    {"campo": "eventos regionais", "origem": "camada de eventos", "obrigatório": "opcional"},
+    {"campo": "horários fortes", "origem": "scanner público por data", "obrigatório": "após validação"},
+    {"campo": "destinos cotados", "origem": "scanner público por data", "obrigatório": "após validação"},
+    {"campo": "motoristas mais cheios", "origem": "scanner público por data", "obrigatório": "após validação"},
+    {"campo": "preço médio/faixa", "origem": "scanner público por data", "obrigatório": "quando detectado"},
 ]
 
 
@@ -84,7 +83,7 @@ def formatar_data_busca(valor: str | date | datetime) -> str:
 
 
 def gerar_link_busca_publica(origem: str, destino: str, data_viagem: str | date | datetime, assentos: int = 1) -> str:
-    """Gera o link público que o operador deve abrir antes de qualquer recomendação."""
+    """Gera o link público interno usado pelo scanner por rota e data."""
     data_iso = formatar_data_busca(data_viagem)
     assentos_int = max(1, min(int(assentos or 1), 4))
     query = urlencode(
