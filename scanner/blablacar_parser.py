@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, asdict
 from urllib.parse import parse_qs, unquote_plus, urlparse
 
-from utils.normalizador_texto import contem_barbosa, contem_ezequiel, limpar_espacos
+from utils.normalizador_texto import limpar_espacos, sem_acentos
 
 
 @dataclass
@@ -14,8 +14,10 @@ class DriverOffer:
     preco: float | None = None
     vagas: str | None = None
     status: str | None = None
-    eh_ezequiel: bool = False
-    eh_barbosa: bool = False
+    eh_ezequiel: bool = False  # compatibilidade histórica; não usado pelo núcleo multiusuário
+    eh_barbosa: bool = False  # compatibilidade histórica; não usado pelo núcleo multiusuário
+    eh_conta_ativa: bool = False
+    eh_conta_grupo: bool = False
     contexto: str | None = None
 
     def to_dict(self) -> dict:
@@ -34,6 +36,7 @@ class ParsedSearch:
 
 URL_RE = re.compile(r"https?://[^\s\"'<>]+blablacar\.com\.br[^\s\"'<>]+", re.IGNORECASE)
 TIME_RE = re.compile(r"\b(?:[01]?\d|2[0-3]):[0-5]\d\b")
+ISO_DATE_RE = re.compile(r"\b20\d{2}-[01]\d-[0-3]\d\b")
 PRICE_RE = re.compile(r"R\$\s*([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{2})?|[0-9]+)")
 
 STATUS_TERMS = [
@@ -46,11 +49,18 @@ STATUS_TERMS = [
 ]
 
 
-def parse_search_text(texto: str) -> ParsedSearch:
+def parse_search_text(
+    texto: str,
+    *,
+    contas_interesse: list[str] | tuple[str, ...] | None = None,
+    conta_ativa: str | None = None,
+) -> ParsedSearch:
     texto_limpo = limpar_espacos(texto)
     link = _extract_link(texto)
     origem, destino, data = _extract_route_from_link(link)
-    motoristas = _extract_driver_offers(texto)
+    if not data:
+        data = _extract_iso_date(texto)
+    motoristas = _extract_driver_offers(texto, contas_interesse=contas_interesse, conta_ativa=conta_ativa)
     return ParsedSearch(
         link_busca=link,
         origem=origem,
@@ -85,10 +95,15 @@ def _extract_route_from_link(link: str | None) -> tuple[str | None, str | None, 
         qs = parse_qs(parsed.query)
         origem = _first(qs.get("fn"))
         destino = _first(qs.get("tn"))
-        data = _first(qs.get("db"))
+        data = _first(qs.get("db")) or _first(qs.get("departure_date"))
         return origem, destino, data
     except Exception:
         return None, None, None
+
+
+def _extract_iso_date(texto: str) -> str | None:
+    match = ISO_DATE_RE.search(texto or "")
+    return match.group(0) if match else None
 
 
 def _first(values: list[str] | None) -> str | None:
@@ -97,32 +112,56 @@ def _first(values: list[str] | None) -> str | None:
     return limpar_espacos(unquote_plus(values[0]))
 
 
-def _extract_driver_offers(texto: str) -> list[DriverOffer]:
+def _normalizar_nome(nome: str | None) -> str:
+    return re.sub(r"\s+", " ", sem_acentos(nome)).strip().lower()
+
+
+def _conta_match(nome_detectado: str | None, conta: str | None) -> bool:
+    nd = _normalizar_nome(nome_detectado)
+    nc = _normalizar_nome(conta)
+    if not nd or not nc:
+        return False
+    return nd == nc or nc in nd or nd in nc
+
+
+def _extract_driver_offers(
+    texto: str,
+    *,
+    contas_interesse: list[str] | tuple[str, ...] | None = None,
+    conta_ativa: str | None = None,
+) -> list[DriverOffer]:
     linhas = [limpar_espacos(l) for l in (texto or "").splitlines() if limpar_espacos(l)]
     joined = "\n".join(linhas)
+    contas = []
+    for conta in list(contas_interesse or []):
+        conta = str(conta or "").strip()
+        if conta and conta not in contas:
+            contas.append(conta)
 
     offers: list[DriverOffer] = []
-    for nome_alvo in ("Ezequiel S", "Barbosa"):
+    for nome_alvo in contas:
         for contexto in _contexts_around(joined, nome_alvo):
-            offers.append(_offer_from_context(nome_alvo, contexto))
+            offers.append(_offer_from_context(nome_alvo, contexto, conta_ativa=conta_ativa, contas_grupo=contas))
 
     blocos = re.split(r"(?=\b(?:[01]?\d|2[0-3]):[0-5]\d\b)", joined)
     for bloco in blocos:
         if "R$" not in bloco:
             continue
-        if contem_ezequiel(bloco) or contem_barbosa(bloco):
+        if any(_normalizar_nome(conta) and _normalizar_nome(conta) in _normalizar_nome(bloco) for conta in contas):
             continue
         horario = _extract_time(bloco)
         preco = _extract_price(bloco)
         if horario or preco is not None:
-            nome = _guess_driver_name(bloco)
+            nome = _guess_driver_name(bloco) or "Concorrente"
             offers.append(
                 DriverOffer(
-                    nome_motorista=nome or "Concorrente",
+                    nome_motorista=nome,
                     horario=horario,
                     preco=preco,
                     vagas=_extract_vagas(bloco),
                     status=_extract_status(bloco),
+                    eh_conta_ativa=_conta_match(nome, conta_ativa),
+                    eh_conta_grupo=any(_conta_match(nome, conta) for conta in contas),
                     contexto=limpar_espacos(bloco)[:500],
                 )
             )
@@ -140,15 +179,15 @@ def _contexts_around(texto: str, termo: str) -> list[str]:
     return contexts
 
 
-def _offer_from_context(nome: str, contexto: str) -> DriverOffer:
+def _offer_from_context(nome: str, contexto: str, *, conta_ativa: str | None, contas_grupo: list[str]) -> DriverOffer:
     return DriverOffer(
         nome_motorista=nome,
         horario=_extract_time(contexto),
         preco=_extract_price(contexto),
         vagas=_extract_vagas(contexto),
         status=_extract_status(contexto),
-        eh_ezequiel=nome.lower() == "ezequiel s",
-        eh_barbosa=nome.lower() == "barbosa",
+        eh_conta_ativa=_conta_match(nome, conta_ativa),
+        eh_conta_grupo=any(_conta_match(nome, conta) for conta in contas_grupo),
         contexto=limpar_espacos(contexto)[:500],
     )
 
@@ -194,7 +233,13 @@ def _dedupe_offers(offers: list[DriverOffer]) -> list[DriverOffer]:
     vistos: set[tuple] = set()
     saida: list[DriverOffer] = []
     for offer in offers:
-        key = (offer.nome_motorista, offer.horario, offer.preco, offer.eh_ezequiel, offer.eh_barbosa)
+        key = (
+            _normalizar_nome(offer.nome_motorista),
+            offer.horario,
+            offer.preco,
+            offer.eh_conta_ativa,
+            offer.eh_conta_grupo,
+        )
         if key in vistos:
             continue
         vistos.add(key)
