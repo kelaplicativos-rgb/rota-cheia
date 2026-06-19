@@ -21,6 +21,7 @@ from rules.datas_operacionais import gerar_datas_operacionais
 from rules.eventos_regionais import normalizar_eventos
 from services.public_scan_service import analisar_busca_publica_por_data
 from services.scan_service import analisar_arquivo_mhtml
+from services.review_rewriter import ESTILOS_AVALIACAO, TIPOS_AVALIACAO, reformular_avaliacao
 
 st.set_page_config(page_title="Rota Cheia", page_icon="🚗", layout="wide")
 
@@ -236,6 +237,40 @@ def render_hero() -> None:
     )
 
 
+def render_review_rewriter() -> None:
+    st.markdown("## ⭐ Reformular avaliações")
+    st.caption("Cole uma avaliação simples e gere uma versão curta, natural e pronta para copiar na BlaBlaCar.")
+
+    with st.expander("Abrir reformulador de avaliações", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            tipo = st.selectbox("Tipo de avaliação", list(TIPOS_AVALIACAO), index=0, key="home_avaliacao_tipo")
+        with col2:
+            estilo = st.selectbox("Estilo", list(ESTILOS_AVALIACAO), index=0, key="home_avaliacao_estilo")
+
+        avaliacao_original = st.text_area(
+            "Cole aqui a avaliação original",
+            placeholder="Ex.: Gente boa recomendo a carona educado",
+            height=110,
+            key="home_avaliacao_original",
+        )
+
+        if st.button("Reformular avaliação", type="primary", use_container_width=True, key="home_reformular_avaliacao"):
+            if not avaliacao_original.strip():
+                st.warning("Cole uma avaliação primeiro.")
+            else:
+                st.session_state["home_avaliacao_reformulada"] = reformular_avaliacao(
+                    avaliacao_original,
+                    tipo=tipo,
+                    estilo=estilo,
+                )
+
+        resultado = st.session_state.get("home_avaliacao_reformulada", "")
+        if resultado:
+            st.success("Avaliação reformulada pronta para copiar:")
+            st.text_area("Copie a avaliação abaixo", value=resultado, height=90, key="home_avaliacao_resultado")
+
+
 def parse_eventos(eventos_txt: str) -> list[dict]:
     eventos = []
     for linha in eventos_txt.splitlines():
@@ -389,6 +424,7 @@ def dataframe_resumido(datas: list[dict]) -> pd.DataFrame:
 
 inject_css()
 render_hero()
+render_review_rewriter()
 
 with st.sidebar:
     st.header("Comando rápido")
