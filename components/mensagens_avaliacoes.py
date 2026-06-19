@@ -23,3 +23,6 @@ def render_mensagens_avaliacoes_inicio() -> None:
         st.text_area("Resultado", value=resultado, height=95, key="inicio_avaliacao_resultado")
 
     st.markdown("### Textos rápidos")
+    texto_base = st.text_area("Cole ou edite um texto rápido", value="", height=100, key="inicio_texto_rapido_base")
+    if texto_base.strip():
+        st.text_area("Texto pronto", value=texto_base.strip(), height=100, key="inicio_texto_rapido_pronto")
