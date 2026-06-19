@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
 
 TIPOS_AVALIACAO = (
-    "Genérica",
+    "Generica",
     "Passageiro homem",
     "Passageira mulher",
     "Motorista",
@@ -12,33 +11,41 @@ TIPOS_AVALIACAO = (
 
 ESTILOS_AVALIACAO = (
     "Curta e natural",
-    "Mais simpática",
+    "Mais simpatica",
     "Mais profissional",
     "Bem direta",
+    "Mais humana",
+    "Mais persuasiva",
+    "Criativa",
+    "Muito recomendavel",
 )
-
-TipoAvaliacao = Literal["Genérica", "Passageiro homem", "Passageira mulher", "Motorista"]
-EstiloAvaliacao = Literal["Curta e natural", "Mais simpática", "Mais profissional", "Bem direta"]
 
 
 ATRIBUTOS_BASE = [
     (r"\bpontual\w*", "pontual"),
     (r"\beducad\w*", "educado"),
     (r"\btranquil\w*", "tranquilo"),
-    (r"\bagrad[áa]vel\w*", "agradável"),
+    (r"\bagrad[áa]vel\w*", "agradavel"),
     (r"\bgente\s+boa\b", "gente boa"),
-    (r"\bsimp[aá]tic\w*", "simpático"),
+    (r"\bsimp[aá]tic\w*", "simpatico"),
     (r"\bcomunicativ\w*", "comunicativo"),
     (r"\brespeitos\w*", "respeitoso"),
-    (r"\brespons[aá]vel\w*", "responsável"),
+    (r"\brespons[aá]vel\w*", "responsavel"),
     (r"\bsegur\w*", "seguro"),
+    (r"\bparceir\w*", "parceiro"),
+    (r"\bconfi[aá]vel\w*", "confiavel"),
+    (r"\blegal\b", "legal"),
+    (r"\borganiza\w*", "organizado"),
+    (r"\bboa\s+companhia\b", "boa companhia"),
+    (r"\botim[ao]\s+companhia\b", "otima companhia"),
+    (r"\bexcelente\b", "excelente"),
 ]
 
 NEGATIVOS = (
-    "não recomendo",
     "nao recomendo",
-    "não gostei",
+    "não recomendo",
     "nao gostei",
+    "não gostei",
     "ruim",
     "problema",
     "atrasou",
@@ -51,26 +58,30 @@ RECOMENDACAO = (
     "indico",
     "aprovado",
     "aprovada",
+    "otima pessoa",
+    "boa pessoa",
 )
-
 
 FEMININO = {
     "educado": "educada",
     "tranquilo": "tranquila",
-    "simpático": "simpática",
+    "simpatico": "simpatica",
     "comunicativo": "comunicativa",
     "respeitoso": "respeitosa",
     "seguro": "segura",
+    "parceiro": "parceira",
+    "organizado": "organizada",
 }
-
 
 MASCULINO = {
     "educada": "educado",
     "tranquila": "tranquilo",
-    "simpática": "simpático",
+    "simpatica": "simpatico",
     "comunicativa": "comunicativo",
     "respeitosa": "respeitoso",
     "segura": "seguro",
+    "parceira": "parceiro",
+    "organizada": "organizado",
 }
 
 
@@ -86,7 +97,7 @@ def _normalizar_para_busca(texto: str) -> str:
 def _genero(tipo: str) -> str:
     if tipo == "Passageiro homem":
         return "masculino"
-    if tipo in {"Passageira mulher", "Genérica"}:
+    if tipo in {"Passageira mulher", "Generica"}:
         return "feminino"
     return "neutro"
 
@@ -141,11 +152,19 @@ def _juntar_pt(itens: list[str]) -> str:
 
 def _frase_recomendacao(tipo: str, estilo: str) -> str:
     if estilo == "Mais profissional":
-        return "Recomendo à comunidade."
-    if estilo == "Mais simpática":
+        return "Recomendo para a comunidade."
+    if estilo == "Mais simpatica":
         return "Recomendo com certeza!"
     if estilo == "Bem direta":
         return "Recomendo!"
+    if estilo == "Mais humana":
+        return "Foi uma experiencia muito tranquila. Recomendo!"
+    if estilo == "Mais persuasiva":
+        return "Pode ir sem preocupacao. Recomendo muito!"
+    if estilo == "Criativa":
+        return "Viagem leve, tranquila e muito positiva. Recomendo!"
+    if estilo == "Muito recomendavel":
+        return "Recomendo muito!"
 
     if tipo == "Passageiro homem":
         return "Recomendo o passageiro!"
@@ -154,6 +173,21 @@ def _frase_recomendacao(tipo: str, estilo: str) -> str:
     if tipo == "Motorista":
         return "Recomendo a carona!"
     return "Recomendo!"
+
+
+def _frase_base(sujeito: str, atributos: list[str], estilo: str) -> str:
+    atributos_txt = _juntar_pt(atributos)
+    if not atributos_txt:
+        return ""
+    if estilo == "Mais humana":
+        return f"{sujeito} {atributos_txt}, deixou a viagem mais leve."
+    if estilo == "Mais persuasiva":
+        return f"{sujeito} {atributos_txt}, excelente companhia para a viagem."
+    if estilo == "Criativa":
+        return f"{sujeito} nota 10: {atributos_txt} do inicio ao fim."
+    if estilo == "Muito recomendavel":
+        return f"{sujeito} {atributos_txt}, experiencia excelente."
+    return f"{sujeito} {atributos_txt}."
 
 
 def _sentence_case(texto: str) -> str:
@@ -165,13 +199,13 @@ def _sentence_case(texto: str) -> str:
 
 def reformular_avaliacao(
     texto: str,
-    tipo: str = "Genérica",
+    tipo: str = "Generica",
     estilo: str = "Curta e natural",
 ) -> str:
-    """Reformula uma avaliação curta sem inventar fatos novos.
+    """Reformula uma avaliacao curta sem inventar fatos novos.
 
-    A função é determinística para funcionar sem chave externa de IA. Ela preserva
-    o sentido da avaliação colada pelo usuário e devolve uma frase pronta para
+    A funcao e deterministica para funcionar sem chave externa de IA. Ela preserva
+    o sentido da avaliacao colada pelo usuario e devolve uma frase pronta para
     copiar e colar na BlaBlaCar.
     """
     texto_limpo = limpar_texto(texto)
@@ -179,22 +213,22 @@ def reformular_avaliacao(
         return ""
 
     if tipo not in TIPOS_AVALIACAO:
-        tipo = "Genérica"
+        tipo = "Generica"
     if estilo not in ESTILOS_AVALIACAO:
         estilo = "Curta e natural"
 
     if _tem_negativo(texto_limpo):
-        return "Não foi uma boa experiência. Não recomendo."
+        return "Nao foi uma boa experiencia. Nao recomendo."
 
     sujeito = _sujeito(tipo)
     atributos = _detectar_atributos(texto_limpo, tipo)
     tem_recomendacao = _tem_recomendacao(texto_limpo)
 
     if atributos:
-        frase_base = f"{sujeito} {_juntar_pt(atributos)}."
+        frase = _frase_base(sujeito, atributos, estilo)
         if tem_recomendacao:
-            return f"{frase_base} {_frase_recomendacao(tipo, estilo)}"
-        return frase_base
+            return f"{frase} {_frase_recomendacao(tipo, estilo)}"
+        return frase
 
     if tem_recomendacao:
         return _frase_recomendacao(tipo, estilo)
