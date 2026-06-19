@@ -5,6 +5,7 @@ import streamlit as st
 from services.review_rewriter import ESTILOS_AVALIACAO, TIPOS_AVALIACAO, reformular_avaliacao
 
 
+# Bloco inicial do aplicativo.
 def render_mensagens_avaliacoes_inicio() -> None:
     st.markdown("## 1. Mensagens e avaliações BlaBlaCar")
     st.markdown("Cole uma avaliação de passageiro e gere uma versão reformulada pronta para usar.")
