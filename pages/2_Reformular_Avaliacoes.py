@@ -42,7 +42,6 @@ if resultado:
         "Copie a avaliação abaixo",
         value=resultado,
         height=110,
-        key="avaliacao_reformulada_preview",
     )
     st.caption("No celular, toque e segure no texto acima para copiar.")
 
