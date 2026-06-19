@@ -5,6 +5,13 @@ import streamlit as st
 from services.review_rewriter import ESTILOS_AVALIACAO, TIPOS_AVALIACAO, reformular_avaliacao
 
 
+TEXTOS_RAPIDOS: dict[str, str] = {
+    "Confirmar reserva": "Oi! Tudo certo. Sua reserva está confirmada. Vou avisar quando estiver indo para o ponto combinado.",
+    "A caminho": "Estou a caminho do ponto combinado. Aviso qualquer atualização importante.",
+    "Combinar ponto": "Me confirme o ponto combinado para eu organizar a viagem direitinho.",
+}
+
+
 # Bloco inicial do aplicativo.
 def render_mensagens_avaliacoes_inicio() -> None:
     st.markdown("## 1. Mensagens e avaliações BlaBlaCar")
@@ -23,6 +30,7 @@ def render_mensagens_avaliacoes_inicio() -> None:
         st.text_area("Resultado", value=resultado, height=95, key="inicio_avaliacao_resultado")
 
     st.markdown("### Textos rápidos")
-    texto_base = st.text_area("Cole ou edite um texto rápido", value="", height=100, key="inicio_texto_rapido_base")
+    texto_modelo = st.selectbox("Modelo", list(TEXTOS_RAPIDOS), key="inicio_texto_rapido_modelo")
+    texto_base = st.text_area("Texto pronto", value=TEXTOS_RAPIDOS[texto_modelo], height=110, key="inicio_texto_rapido_base")
     if texto_base.strip():
-        st.text_area("Texto pronto", value=texto_base.strip(), height=100, key="inicio_texto_rapido_pronto")
+        st.text_area("Copiar texto", value=texto_base.strip(), height=100, key="inicio_texto_rapido_pronto")
