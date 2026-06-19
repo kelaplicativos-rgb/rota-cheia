@@ -5,6 +5,7 @@ from html import escape
 import pandas as pd
 import streamlit as st
 
+from components.mensagens_avaliacoes import render_mensagens_avaliacoes_inicio
 from config.caronas_config import (
     CONTAS_SUGERIDAS,
     DESTINOS,
@@ -21,14 +22,14 @@ from rules.agenda import listar_padrao_logistico
 from rules.datas_operacionais import gerar_datas_operacionais
 from rules.eventos_regionais import normalizar_eventos
 from services.public_scan_service import analisar_busca_publica_por_data
-from services.review_rewriter import ESTILOS_AVALIACAO, TIPOS_AVALIACAO, reformular_avaliacao
 
 
 st.set_page_config(page_title="Rota Cheia", page_icon="🚗", layout="wide")
 init_db()
 
+
 CSS = """
-<style id="rota-cheia-tema-blablacar-v4">
+<style id="rota-cheia-tema-blablacar-v5">
 :root {
     --rc-bg: #ffffff;
     --rc-bg-soft: #f5f9ff;
@@ -39,12 +40,11 @@ CSS = """
     --rc-muted: #5f6f86;
     --rc-border: #dce6f3;
     --rc-success: #087c54;
-    --rc-success-soft: #ccffcb;
     --rc-warning: #f59e0b;
     --rc-danger: #dc2626;
 }
 html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main, .appview-container, .main {
-    background: #ffffff !important;
+    background: var(--rc-bg) !important;
     color: var(--rc-navy) !important;
 }
 [data-testid="stHeader"], header[data-testid="stHeader"], [data-testid="stToolbar"] {
@@ -53,7 +53,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewC
 .block-container {
     padding-top: .78rem !important;
     padding-bottom: 5rem !important;
-    max-width: 860px !important;
+    max-width: 900px !important;
 }
 [data-testid="stSidebar"] {
     background: #ffffff !important;
@@ -152,13 +152,13 @@ p, span, label, small,
     color: var(--rc-navy) !important;
     background: #ffffff !important;
 }
-.stButton > button[kind="primary"], .stButton > button:has(p), .stDownloadButton > button[kind="primary"] {
+.stButton > button[kind="primary"], .stDownloadButton > button[kind="primary"] {
     background: var(--rc-blue) !important;
     color: #ffffff !important;
     border-color: var(--rc-blue) !important;
     box-shadow: 0 12px 24px rgba(8, 124, 245, .22) !important;
 }
-.stButton > button[kind="primary"] *, .stDownloadButton > button[kind="primary"] *, .stButton > button:has(p) * {
+.stButton > button[kind="primary"] *, .stDownloadButton > button[kind="primary"] * {
     color: #ffffff !important;
 }
 .stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, [data-baseweb="select"] > div {
@@ -206,15 +206,13 @@ def render_hero() -> None:
             <div class="rc-step">Central multiusuário para lotar o carro</div>
             <h1 class="rc-title">Rota Cheia</h1>
             <p class="rc-muted">
-                Informe origem, destino e contas públicas do seu grupo. O sistema valida a busca pública
-                da BlaBlaCar por rota + data, cruza sinais de eventos e retorna a melhor decisão sem
-                depender de nomes fixos ou arquivo enviado pelo usuário.
+                Comece pelo recurso mais rápido: avaliações. Depois planeje a viagem, valide a busca pública
+                da BlaBlaCar por rota + data e só então tome a decisão operacional.
             </p>
             <div class="rc-pill-row">
-                <span class="rc-pill">Multiusuário</span>
+                <span class="rc-pill">Avaliações no início</span>
                 <span class="rc-pill">SCAN BLA público</span>
                 <span class="rc-pill">Validação forte</span>
-                <span class="rc-pill">Conflitos configuráveis</span>
                 <span class="rc-pill">Sem validação: {escape(STATUS_NAO_VALIDADO)}</span>
             </div>
         </section>
@@ -424,61 +422,13 @@ def dataframe_resumido(datas: list[dict]) -> pd.DataFrame:
     return df[[c for c in colunas if c in df.columns]]
 
 
-def render_mensagens_prontas() -> None:
-    st.markdown("### 💬 Mensagens rápidas para passageiros")
-    mensagens = {
-        "Após reserva": (
-            "Oi! Tudo certo 👍\n\n"
-            "Vi sua reserva e está tudo confirmado. Assim que eu estiver indo para o ponto de embarque, "
-            "te aviso o tempo estimado para chegar e combinamos direitinho."
-        ),
-        "Bio curta": (
-            "Aceito Pix ou dinheiro. Após a reserva, entro em contato para combinar o embarque. "
-            "Não entro nas cidades; embarque/desembarque em trevos, postos ou pontos na rodovia."
-        ),
-        "A caminho": "Estou a caminho do ponto combinado. Te aviso qualquer atualização e chego em breve 👍",
-    }
-
-    with st.expander("Abrir mensagens prontas", expanded=False):
-        escolha_msg = st.selectbox("Mensagem", list(mensagens), key="mensagem_pronta_tipo")
-        st.text_area("Copie a mensagem", value=mensagens[escolha_msg], height=120, key="mensagem_pronta_texto")
-
-
-def render_review_rewriter() -> None:
-    st.markdown("### ⭐ Reformular avaliações")
-    with st.expander("Abrir reformulador de avaliações", expanded=False):
-        col1, col2 = st.columns(2)
-        with col1:
-            tipo = st.selectbox("Tipo de avaliação", list(TIPOS_AVALIACAO), index=0, key="home_avaliacao_tipo")
-        with col2:
-            estilo = st.selectbox("Estilo", list(ESTILOS_AVALIACAO), index=0, key="home_avaliacao_estilo")
-        avaliacao_original = st.text_area(
-            "Cole aqui a avaliação original",
-            placeholder="Ex.: Gente boa recomendo a carona educado",
-            height=110,
-            key="home_avaliacao_original",
-        )
-        if st.button("Reformular avaliação", type="primary", use_container_width=True, key="home_reformular_avaliacao"):
-            if not avaliacao_original.strip():
-                st.warning("Cole uma avaliação primeiro.")
-            else:
-                st.session_state["home_avaliacao_reformulada"] = reformular_avaliacao(
-                    avaliacao_original,
-                    tipo=tipo,
-                    estilo=estilo,
-                )
-        resultado = st.session_state.get("home_avaliacao_reformulada", "")
-        if resultado:
-            st.success("Avaliação reformulada pronta para copiar:")
-            st.text_area("Copie a avaliação abaixo", value=resultado, height=90, key="home_avaliacao_resultado")
-
-
 inject_css()
 render_hero()
+render_mensagens_avaliacoes_inicio()
 
 with st.sidebar:
     st.header("SCAN BLA")
-    st.caption("Fluxo seguro: planejar → validar rota + data → decidir.")
+    st.caption("Fluxo seguro: avaliações → planejar → validar rota + data → decidir.")
     st.warning(f"Sem validação: {STATUS_NAO_VALIDADO}")
     st.markdown(f"**Entrada pública:** [{PUBLIC_CARPOOL_ENTRYPOINT}]({PUBLIC_CARPOOL_ENTRYPOINT})")
     st.markdown("**Não usar como nome:** " + ", ".join(IDENTIFICADORES_BLOQUEADOS))
@@ -486,7 +436,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Regra:** não existe conta fixa. Cada usuário informa a própria conta pública e contas do mesmo grupo logístico.")
 
-st.markdown("## 1. Planejar viagem")
+st.markdown("---")
+st.markdown("## 2. Planejar viagem")
 st.markdown("Informe a origem, o destino e o período para o sistema encontrar as melhores datas com antecedência.")
 
 col1, col2 = st.columns(2)
@@ -552,7 +503,7 @@ datas = gerar_datas_operacionais(
 )
 st.session_state["datas_sugeridas"] = datas
 
-st.markdown("## 2. Escolher melhor data e horário")
+st.markdown("## 3. Escolher melhor data e horário")
 render_resumo_datas(datas)
 
 if datas:
@@ -570,7 +521,7 @@ if datas:
     with st.expander("Ver ranking completo", expanded=False):
         st.dataframe(dataframe_resumido(datas), use_container_width=True, hide_index=True)
 
-    st.markdown("## 3. SCAN BLA — validar rota + data")
+    st.markdown("## 4. SCAN BLA — validar rota + data")
     st.markdown(
         "A decisão operacional só é liberada depois da validação pública por rota + data. "
         "O app não pede arquivo .mhtml/.mht no fluxo do usuário."
@@ -644,8 +595,3 @@ with col_hist:
 with col_agenda:
     with st.expander("Agenda operacional padrão", expanded=False):
         st.dataframe(pd.DataFrame(listar_padrao_logistico()), use_container_width=True, hide_index=True)
-
-st.markdown("---")
-st.markdown("## 4. Mensagens e avaliações BlaBlaCar")
-render_mensagens_prontas()
-render_review_rewriter()
