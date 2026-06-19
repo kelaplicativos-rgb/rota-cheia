@@ -21,3 +21,5 @@ def render_mensagens_avaliacoes_inicio() -> None:
     if resultado:
         st.success("Avaliação reformulada pronta:")
         st.text_area("Resultado", value=resultado, height=95, key="inicio_avaliacao_resultado")
+
+    st.markdown("### Textos rápidos")
