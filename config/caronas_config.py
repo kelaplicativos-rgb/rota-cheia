@@ -8,7 +8,8 @@ PUBLIC_SEARCH_BASE = "https://www.blablacar.com.br/search"
 PUBLIC_ALLOWED_HOSTS = ("www.blablacar.com.br", "blablacar.com.br")
 PUBLIC_ALLOWED_PATHS = ("/carpool", "/search", "/search-car-sharing")
 
-CONTAS = ("Ezequiel S", "Barbosa")
+# Sugestões de demonstração. O núcleo não depende destes nomes.
+CONTAS_SUGERIDAS = ("Ezequiel S", "Barbosa")
 IDENTIFICADORES_BLOQUEADOS = ("4.9", "Super Driver", "Embaixador", "Expert")
 
 ORIGENS = (
@@ -27,6 +28,7 @@ DESTINOS = (
 )
 
 DESTINOS_IGNORADOS = ("Caxambu, MG, Brasil",)
+TERMOS_CONFLITO_SUGERIDOS = ("Três Corações",)
 
 INTERMEDIARIAS_PADRAO = (
     "Extrema, Pouso Alegre, Três Corações, Cambuquira, Campanha quando fizer sentido"
@@ -57,8 +59,8 @@ FLUXO_SEGURO_APK = [
     },
     {
         "etapa": "Fallback técnico",
-        "uso no sistema": "Importação manual somente quando o scanner público falhar.",
-        "regra": "Fallback não faz parte do fluxo principal do usuário.",
+        "uso no sistema": "Importação manual somente para diagnóstico interno, fora do fluxo do usuário.",
+        "regra": "O usuário final não precisa fornecer .mhtml/.mht.",
     },
 ]
 
@@ -74,6 +76,21 @@ CAMPOS_SCAN_PUBLICO = [
 ]
 
 
+def normalizar_lista_texto(valores: list[str] | tuple[str, ...] | str | None) -> list[str]:
+    if valores is None:
+        return []
+    if isinstance(valores, str):
+        bruto = valores.replace(",", "\n").splitlines()
+    else:
+        bruto = list(valores)
+    saida: list[str] = []
+    for valor in bruto:
+        item = str(valor or "").strip()
+        if item and item not in saida:
+            saida.append(item)
+    return saida
+
+
 def formatar_data_busca(valor: str | date | datetime) -> str:
     if isinstance(valor, datetime):
         return valor.date().isoformat()
@@ -83,7 +100,11 @@ def formatar_data_busca(valor: str | date | datetime) -> str:
 
 
 def gerar_link_busca_publica(origem: str, destino: str, data_viagem: str | date | datetime, assentos: int = 1) -> str:
-    """Gera o link público interno usado pelo scanner por rota e data."""
+    """Gera link público de auditoria.
+
+    Importante: este link não é usado como evidência de validação. A validação forte
+    só considera rota/data encontradas no HTML/JSON público retornado pela BlaBlaCar.
+    """
     data_iso = formatar_data_busca(data_viagem)
     assentos_int = max(1, min(int(assentos or 1), 4))
     query = urlencode(

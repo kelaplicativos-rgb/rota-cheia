@@ -6,13 +6,14 @@ import pandas as pd
 import streamlit as st
 
 from config.caronas_config import (
-    CONTAS,
+    CONTAS_SUGERIDAS,
     DESTINOS,
     DESTINOS_IGNORADOS,
     IDENTIFICADORES_BLOQUEADOS,
     ORIGENS,
     PUBLIC_CARPOOL_ENTRYPOINT,
     STATUS_NAO_VALIDADO,
+    TERMOS_CONFLITO_SUGERIDOS,
 )
 from database.db import init_db
 from database.repository import list_recent_scans, save_scan
@@ -20,17 +21,14 @@ from rules.agenda import listar_padrao_logistico
 from rules.datas_operacionais import gerar_datas_operacionais
 from rules.eventos_regionais import normalizar_eventos
 from services.public_scan_service import analisar_busca_publica_por_data
-from services.scan_service import analisar_arquivo_mhtml
 from services.review_rewriter import ESTILOS_AVALIACAO, TIPOS_AVALIACAO, reformular_avaliacao
 
 
 st.set_page_config(page_title="Rota Cheia", page_icon="🚗", layout="wide")
 init_db()
 
-SENTIDOS = ["IDA", "VOLTA"]
-
 CSS = """
-<style id="rota-cheia-tema-blablacar-v2">
+<style id="rota-cheia-tema-blablacar-v4">
 :root {
     --rc-bg: #ffffff;
     --rc-bg-soft: #f5f9ff;
@@ -45,40 +43,23 @@ CSS = """
     --rc-warning: #f59e0b;
     --rc-danger: #dc2626;
 }
-
-/* força tema claro mesmo quando o Streamlit/cache ainda carrega estilos antigos */
-html,
-body,
-.stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] > .main,
-.appview-container,
-.main {
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main, .appview-container, .main {
     background: #ffffff !important;
     color: var(--rc-navy) !important;
 }
-
-[data-testid="stHeader"],
-header[data-testid="stHeader"],
-[data-testid="stToolbar"] {
+[data-testid="stHeader"], header[data-testid="stHeader"], [data-testid="stToolbar"] {
     background: rgba(255, 255, 255, .96) !important;
 }
-
 .block-container {
     padding-top: .78rem !important;
     padding-bottom: 5rem !important;
-    max-width: 780px !important;
+    max-width: 860px !important;
 }
-
 [data-testid="stSidebar"] {
     background: #ffffff !important;
     border-right: 1px solid var(--rc-border) !important;
 }
-
-[data-testid="stSidebar"] * {
-    color: var(--rc-navy) !important;
-}
-
+[data-testid="stSidebar"] * { color: var(--rc-navy) !important; }
 h1, h2, h3, h4, h5, h6,
 [data-testid="stMarkdownContainer"] h1,
 [data-testid="stMarkdownContainer"] h2,
@@ -87,14 +68,12 @@ h1, h2, h3, h4, h5, h6,
     color: var(--rc-navy) !important;
     letter-spacing: -.045em !important;
 }
-
 p, span, label, small,
 [data-testid="stMarkdownContainer"] p,
 [data-testid="stMarkdownContainer"] li,
 .stCaptionContainer {
     color: var(--rc-muted) !important;
 }
-
 .rc-hero, .rc-card, .rc-scan, .rc-result, .rc-blocked {
     border-radius: 26px !important;
     padding: 1.05rem !important;
@@ -102,12 +81,10 @@ p, span, label, small,
     border: 1px solid var(--rc-border) !important;
     box-shadow: 0 10px 24px rgba(3, 27, 69, .07) !important;
 }
-
 .rc-hero {
     border: 3px solid var(--rc-blue) !important;
     box-shadow: 0 12px 28px rgba(8, 124, 245, .14) !important;
 }
-
 .rc-title {
     font-size: clamp(2.35rem, 8vw, 4.5rem) !important;
     line-height: .96 !important;
@@ -116,16 +93,13 @@ p, span, label, small,
     color: var(--rc-navy) !important;
     letter-spacing: -.06em !important;
 }
-
 .rc-muted {
     color: var(--rc-muted) !important;
     font-size: 1rem !important;
     line-height: 1.42 !important;
     font-weight: 650 !important;
 }
-
 .rc-pill-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
-
 .rc-pill {
     border: 1px solid rgba(8, 124, 245, .24) !important;
     background: var(--rc-blue-soft) !important;
@@ -135,7 +109,6 @@ p, span, label, small,
     font-size: .82rem !important;
     font-weight: 850 !important;
 }
-
 .rc-step {
     display: inline-flex;
     padding: .38rem .72rem;
@@ -147,14 +120,12 @@ p, span, label, small,
     font-size: .78rem;
     text-transform: uppercase;
 }
-
 .rc-score { font-size: 2.15rem; font-weight: 950; line-height: 1; }
 .rc-good { color: var(--rc-success) !important; }
 .rc-warn { color: var(--rc-warning) !important; }
 .rc-danger { color: var(--rc-danger) !important; }
 .rc-result { border-color: rgba(8, 124, 84, .38) !important; background: #fbfffb !important; }
 .rc-blocked { border-color: rgba(220, 38, 38, .25) !important; background: #fffafa !important; }
-
 .rc-mini-table { width: 100%; border-collapse: collapse; }
 .rc-mini-table td {
     border-bottom: 1px solid rgba(3, 27, 69, .10) !important;
@@ -167,17 +138,13 @@ p, span, label, small,
     width: 38%;
     font-weight: 800;
 }
-
 [data-testid="stMetric"] {
     background: #ffffff !important;
     border: 1px solid var(--rc-border) !important;
     border-radius: 20px !important;
     box-shadow: 0 8px 18px rgba(3, 27, 69, .055) !important;
 }
-
-.stButton > button,
-.stDownloadButton > button,
-.stLinkButton > a {
+.stButton > button, .stDownloadButton > button, .stLinkButton > a {
     border-radius: 18px !important;
     min-height: 3rem !important;
     font-weight: 900 !important;
@@ -185,55 +152,36 @@ p, span, label, small,
     color: var(--rc-navy) !important;
     background: #ffffff !important;
 }
-
-.stButton > button[kind="primary"],
-.stButton > button:has(p),
-.stDownloadButton > button[kind="primary"] {
+.stButton > button[kind="primary"], .stButton > button:has(p), .stDownloadButton > button[kind="primary"] {
     background: var(--rc-blue) !important;
     color: #ffffff !important;
     border-color: var(--rc-blue) !important;
     box-shadow: 0 12px 24px rgba(8, 124, 245, .22) !important;
 }
-
-.stButton > button[kind="primary"] *,
-.stDownloadButton > button[kind="primary"] *,
-.stButton > button:has(p) * {
+.stButton > button[kind="primary"] *, .stDownloadButton > button[kind="primary"] *, .stButton > button:has(p) * {
     color: #ffffff !important;
 }
-
-.stTextInput input,
-.stNumberInput input,
-.stDateInput input,
-.stTextArea textarea,
-[data-baseweb="select"] > div {
+.stTextInput input, .stNumberInput input, .stDateInput input, .stTextArea textarea, [data-baseweb="select"] > div {
     background: #ffffff !important;
     color: var(--rc-navy) !important;
     border: 1px solid var(--rc-border) !important;
     border-radius: 18px !important;
     min-height: 3rem !important;
 }
-
-[data-testid="stExpander"],
-[data-testid="stDataFrame"] {
+[data-testid="stExpander"], [data-testid="stDataFrame"] {
     background: #ffffff !important;
     border: 1px solid var(--rc-border) !important;
     border-radius: 20px !important;
     box-shadow: 0 8px 18px rgba(3, 27, 69, .045) !important;
 }
-
-hr {
-    border-color: rgba(3, 27, 69, .10) !important;
-}
-
+hr { border-color: rgba(3, 27, 69, .10) !important; }
 @media (max-width: 768px) {
     .block-container {
         max-width: 100vw !important;
         padding-left: .78rem !important;
         padding-right: .78rem !important;
     }
-    .rc-title {
-        font-size: clamp(2.1rem, 11vw, 3.2rem) !important;
-    }
+    .rc-title { font-size: clamp(2.1rem, 11vw, 3.2rem) !important; }
 }
 </style>
 """
@@ -255,23 +203,33 @@ def render_hero() -> None:
     st.markdown(
         f"""
         <section class="rc-hero">
-            <div class="rc-step">Central de decisão para lotar o carro</div>
+            <div class="rc-step">Central multiusuário para lotar o carro</div>
             <h1 class="rc-title">Rota Cheia</h1>
             <p class="rc-muted">
-                Escolha a rota, valide a busca pública da BlaBlaCar e receba uma decisão segura
-                para lotar o carro sem duplicar anúncio e sem conflito entre Ezequiel S e Barbosa.
+                Informe origem, destino e contas públicas do seu grupo. O sistema valida a busca pública
+                da BlaBlaCar por rota + data, cruza sinais de eventos e retorna a melhor decisão sem
+                depender de nomes fixos ou arquivo enviado pelo usuário.
             </p>
             <div class="rc-pill-row">
-                <span class="rc-pill">SCAN BLA obrigatório</span>
-                <span class="rc-pill">Ranking de horários</span>
-                <span class="rc-pill">Ranking de cidades</span>
-                <span class="rc-pill">Decisão pronta para copiar</span>
+                <span class="rc-pill">Multiusuário</span>
+                <span class="rc-pill">SCAN BLA público</span>
+                <span class="rc-pill">Validação forte</span>
+                <span class="rc-pill">Conflitos configuráveis</span>
                 <span class="rc-pill">Sem validação: {escape(STATUS_NAO_VALIDADO)}</span>
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
+
+
+def parse_linhas(texto: str) -> list[str]:
+    saida: list[str] = []
+    for linha in (texto or "").splitlines():
+        linha = linha.strip()
+        if linha and linha not in saida:
+            saida.append(linha)
+    return saida
 
 
 def parse_eventos(eventos_txt: str) -> list[dict]:
@@ -437,7 +395,7 @@ def render_decisao(decisao: dict) -> None:
 def render_falha_controlada(exc: Exception) -> None:
     st.error(STATUS_NAO_VALIDADO)
     st.warning(f"Falha técnica controlada: {exc}")
-    st.info("Use o fallback com o arquivo .mht/.mhtml salvo da busca pública por rota + data.")
+    st.info("A busca automática pública não validou esta rota/data. Não publique antes de validar a data exata.")
 
 
 def gerar_opcoes(datas: list[dict]) -> list[str]:
@@ -523,25 +481,54 @@ with st.sidebar:
     st.caption("Fluxo seguro: planejar → validar rota + data → decidir.")
     st.warning(f"Sem validação: {STATUS_NAO_VALIDADO}")
     st.markdown(f"**Entrada pública:** [{PUBLIC_CARPOOL_ENTRYPOINT}]({PUBLIC_CARPOOL_ENTRYPOINT})")
-    st.markdown("**Contas:** " + ", ".join(CONTAS))
     st.markdown("**Não usar como nome:** " + ", ".join(IDENTIFICADORES_BLOQUEADOS))
     st.markdown("**Ignorar:** " + ", ".join(DESTINOS_IGNORADOS))
     st.markdown("---")
-    st.markdown("**Regra:** se Ezequiel S ou Barbosa já aparecer na rota/data, não criar duplicado.")
+    st.markdown("**Regra:** não existe conta fixa. Cada usuário informa a própria conta pública e contas do mesmo grupo logístico.")
 
 st.markdown("## 1. Planejar viagem")
-st.markdown("Escolha o corredor e gere oportunidades futuras com antecedência para encher o carro.")
+st.markdown("Informe a origem, o destino e o período para o sistema encontrar as melhores datas com antecedência.")
 
-col1, col2, col3 = st.columns([1.2, 1.2, .8])
+col1, col2 = st.columns(2)
 with col1:
-    origem_cap = st.selectbox("Origem", list(ORIGENS), key="origem_cap")
-    destino_cap = st.selectbox("Destino final", list(DESTINOS), key="destino_cap")
+    origem_base = st.selectbox("Origem sugerida", list(ORIGENS), key="origem_base")
+    origem_custom = st.text_input("Ou digite outra origem", value=origem_base, key="origem_custom")
 with col2:
-    conta_scan = st.selectbox("Conta analisada", list(CONTAS), key="conta_scan")
-    semanas = st.slider("Antecedência em semanas", min_value=1, max_value=12, value=3)
+    destino_base = st.selectbox("Destino sugerido", list(DESTINOS), key="destino_base")
+    destino_custom = st.text_input("Ou digite outro destino final", value=destino_base, key="destino_custom")
+
+origem_cap = origem_custom.strip() or origem_base
+destino_cap = destino_custom.strip() or destino_base
+
+col3, col4, col5 = st.columns([1.3, 1, .8])
 with col3:
+    conta_scan = st.text_input("Nome público da conta ativa", value=CONTAS_SUGERIDAS[0], key="conta_scan")
+with col4:
+    semanas = st.slider("Antecedência em semanas", min_value=1, max_value=12, value=3)
+with col5:
     assentos_cap = st.number_input("Assentos", min_value=1, max_value=4, value=1, step=1, key="assentos_cap")
-    incluir_sabado = st.checkbox("Sábado à noite", value=False, help="Use somente quando demanda ou evento justificar.")
+
+with st.expander("Contas do mesmo grupo e conflitos logísticos", expanded=False):
+    st.caption("Use uma conta por linha. O sistema é multiusuário: estes nomes são configurados pelo motorista/empresa.")
+    contas_grupo_txt = st.text_area(
+        "Outras contas públicas do mesmo grupo logístico",
+        value="\n".join(CONTAS_SUGERIDAS[1:]),
+        placeholder="Ex.: Nome da segunda conta\nMotorista reserva\nConta da empresa",
+        height=110,
+        key="contas_grupo_txt",
+    )
+    st.caption("Termos/cidades onde duas contas do mesmo grupo não devem publicar/ir no mesmo dia.")
+    termos_conflito_txt = st.text_area(
+        "Termos de conflito",
+        value="\n".join(TERMOS_CONFLITO_SUGERIDOS),
+        placeholder="Ex.: Três Corações\nSão Tomé das Letras\nAeroporto",
+        height=110,
+        key="termos_conflito_txt",
+    )
+
+contas_grupo = [conta_scan.strip()] + parse_linhas(contas_grupo_txt)
+contas_grupo = [c for i, c in enumerate(contas_grupo) if c and c not in contas_grupo[:i]]
+termos_conflito = parse_linhas(termos_conflito_txt)
 
 with st.expander("Eventos e alta demanda", expanded=False):
     st.caption("Formato: nome | cidade | data | peso. Exemplo: Festival X | São Tomé das Letras | 2026-07-10 | 40")
@@ -549,8 +536,11 @@ with st.expander("Eventos e alta demanda", expanded=False):
         "Eventos regionais que aumentam a pontuação",
         placeholder="Festival X | São Tomé das Letras | 2026-07-10 | 40",
     )
+    st.info("A busca ampla de eventos deve entrar como coletor automático; por enquanto este campo permite alimentar eventos conhecidos sem bloquear o SCAN BLA.")
 
 eventos = parse_eventos(eventos_txt)
+incluir_sabado = any("sab" in (e.get("nome", "") + e.get("cidade", "")).lower() for e in eventos)
+
 datas = gerar_datas_operacionais(
     origem_ida=origem_cap,
     destino_ida=destino_cap,
@@ -583,14 +573,15 @@ if datas:
     st.markdown("## 3. SCAN BLA — validar rota + data")
     st.markdown(
         "A decisão operacional só é liberada depois da validação pública por rota + data. "
-        "Se a leitura automática for bloqueada, use o fallback `.mht/.mhtml` abaixo."
+        "O app não pede arquivo .mhtml/.mht no fluxo do usuário."
     )
     st.markdown(
         f"""
         <div class="rc-scan">
             <div class="rc-step">Busca pública obrigatória</div>
             {html_table([
-                ('conta', conta_scan),
+                ('conta ativa', conta_scan),
+                ('contas do grupo', ', '.join(contas_grupo)),
                 ('rota', f"{item.get('origem')} → {item.get('destino_final')}"),
                 ('data', item.get('data')),
                 ('horário planejado', item.get('horario')),
@@ -618,6 +609,8 @@ if datas:
                     sentido=item["sentido"],
                     horario_planejado=item["horario"],
                     assentos=int(assentos_cap),
+                    contas_grupo=contas_grupo,
+                    termos_conflito=termos_conflito,
                 )
                 validacao = resultado["validacao"]
                 if validacao.get("valido"):
@@ -633,57 +626,6 @@ if datas:
                 if salvar_scan:
                     scan_id = save_scan(resultado["scan"], resultado["motoristas"], resultado["decisao"])
                     st.success(f"Scanner salvo no histórico com ID {scan_id}.")
-            except Exception as exc:
-                render_falha_controlada(exc)
-
-    st.markdown("## 4. Fallback, se necessário")
-    with st.expander("Enviar busca salva da BlaBlaCar (.mht/.mhtml)", expanded=False):
-        st.caption("Use quando o scanner público retornar bloqueio/403. Salve a página pública da BlaBlaCar e envie aqui.")
-        col_fb1, col_fb2 = st.columns(2)
-        with col_fb1:
-            origem_fb = st.selectbox(
-                "Origem esperada",
-                list(ORIGENS),
-                index=list(ORIGENS).index(item["origem"]) if item.get("origem") in ORIGENS else 0,
-                key="origem_fb",
-            )
-            destino_fb = st.selectbox(
-                "Destino final esperado",
-                list(DESTINOS),
-                index=list(DESTINOS).index(item["destino_final"]) if item.get("destino_final") in DESTINOS else 0,
-                key="destino_fb",
-            )
-            data_fb = st.date_input("Data exata", value=pd.to_datetime(item["data"]).date(), key="data_fb")
-        with col_fb2:
-            conta_fb = st.selectbox("Conta", list(CONTAS), index=list(CONTAS).index(conta_scan), key="conta_fb")
-            sentido_fb = st.selectbox(
-                "Sentido",
-                SENTIDOS,
-                index=SENTIDOS.index(item["sentido"]) if item.get("sentido") in SENTIDOS else 0,
-                key="sentido_fb",
-            )
-            horario_fb = st.text_input("Horário planejado", value=str(item.get("horario") or ""), key="horario_fb")
-            salvar_fb = st.checkbox("Salvar fallback no histórico", value=False, key="salvar_fallback")
-
-        arquivo_fb = st.file_uploader("Arquivo salvo da busca pública", type=["mhtml", "mht"])
-        if st.button("Analisar fallback", disabled=arquivo_fb is None, use_container_width=True):
-            try:
-                resultado_fb = analisar_arquivo_mhtml(
-                    raw_bytes=arquivo_fb.getvalue(),
-                    arquivo_nome=arquivo_fb.name,
-                    origem_esperada=origem_fb,
-                    destino_esperado=destino_fb,
-                    data_esperada=data_fb.isoformat(),
-                    conta=conta_fb,
-                    sentido=sentido_fb,
-                    horario_planejado=horario_fb or None,
-                    link_publico_manual=None,
-                )
-                render_concorrencia(resultado_fb["concorrencia"])
-                render_decisao(resultado_fb["decisao"])
-                if salvar_fb:
-                    scan_id = save_scan(resultado_fb["scan"], resultado_fb["motoristas"], resultado_fb["decisao"])
-                    st.success(f"Fallback salvo no histórico com ID {scan_id}.")
             except Exception as exc:
                 render_falha_controlada(exc)
 else:
@@ -704,6 +646,6 @@ with col_agenda:
         st.dataframe(pd.DataFrame(listar_padrao_logistico()), use_container_width=True, hide_index=True)
 
 st.markdown("---")
-st.markdown("## 5. Mensagens e avaliações BlaBlaCar")
+st.markdown("## 4. Mensagens e avaliações BlaBlaCar")
 render_mensagens_prontas()
 render_review_rewriter()

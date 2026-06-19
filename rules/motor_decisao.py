@@ -8,7 +8,7 @@ from rules.anti_duplicidade import (
     horario_publicado_da_conta,
     preco_publicado_da_conta,
 )
-from rules.conflito_contas import risco_conflito_tres_coracoes
+from rules.conflito_contas import risco_conflito_contas
 from rules.precos import sugerir_preco
 from utils.normalizador_texto import sem_acentos
 
@@ -39,8 +39,10 @@ def _score_lotacao(motorista: dict) -> int:
 
 def _horario_mais_forte(motoristas: list[dict], conta: str) -> str | None:
     pontos: dict[str, int] = {}
+    conta_norm = sem_acentos(conta).strip().lower()
     for motorista in motoristas:
-        if motorista.get("eh_ezequiel") or motorista.get("eh_barbosa"):
+        nome = sem_acentos(motorista.get("nome_motorista")).strip().lower()
+        if conta_norm and (conta_norm == nome or conta_norm in nome or nome in conta_norm):
             continue
         horario = motorista.get("horario")
         if not horario:
@@ -97,7 +99,15 @@ def _decidir_ajuste_publicado(
     )
 
 
-def decidir_acao(parsed: dict, validacao: dict, conta: str, horario_planejado: str | None = None) -> dict:
+def decidir_acao(
+    parsed: dict,
+    validacao: dict,
+    conta: str,
+    horario_planejado: str | None = None,
+    *,
+    contas_grupo: list[str] | tuple[str, ...] | None = None,
+    termos_conflito: list[str] | tuple[str, ...] | None = None,
+) -> dict:
     motoristas = parsed.get("motoristas", []) or []
     origem = parsed.get("origem")
     destino = parsed.get("destino")
@@ -107,10 +117,10 @@ def decidir_acao(parsed: dict, validacao: dict, conta: str, horario_planejado: s
         return {
             "acao": "não confirmado",
             "conta": conta,
-            "origem": origem,
-            "destino_final": destino,
+            "origem": origem or parsed.get("origem_solicitada"),
+            "destino_final": destino or parsed.get("destino_solicitado"),
             "intermediarias": INTERMEDIARIAS_PADRAO,
-            "data": data,
+            "data": data or parsed.get("data_solicitada"),
             "horario": horario_planejado or "não confirmado",
             "preco_sugerido": "não sugerido",
             "risco_conflito": "não confirmado",
@@ -119,7 +129,13 @@ def decidir_acao(parsed: dict, validacao: dict, conta: str, horario_planejado: s
         }
 
     publicado = existe_publicacao_da_conta(motoristas, conta)
-    risco = risco_conflito_tres_coracoes(destino, motoristas, conta)
+    risco = risco_conflito_contas(
+        destino=destino,
+        motoristas=motoristas,
+        conta_analisada=conta,
+        contas_grupo=contas_grupo,
+        termos_conflito=termos_conflito,
+    )
     preco = sugerir_preco(motoristas)
 
     if publicado:
@@ -129,13 +145,13 @@ def decidir_acao(parsed: dict, validacao: dict, conta: str, horario_planejado: s
             horario_planejado=horario_planejado,
         )
     else:
-        acao = "CRIAR"
+        acao = "PUBLICAR"
         horario = horario_planejado or _horario_mais_forte(motoristas, conta) or "definir pelo padrão logístico"
         motivo = f"{conta} não aparece publicado na busca pública validada para esta rota/data."
 
     if risco.startswith("alto"):
-        acao = "ALTERAR DESTINO FINAL"
-        motivo = f"Conflito logístico detectado em Três Corações. {motivo}"
+        acao = "NÃO PUBLICAR"
+        motivo = f"Conflito logístico detectado por regra multiusuário. {motivo}"
 
     return {
         "acao": acao,
