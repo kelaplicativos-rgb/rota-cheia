@@ -4,7 +4,7 @@ App assistente de caronas para planejar, validar e organizar viagens no corredor
 
 ## Objetivo
 
-O Rota Cheia ajuda a lotar o carro com antecedência analisando buscas públicas da BlaBlaCar, arquivos `.mhtml/.mht`, motoristas, horários, preços e possíveis conflitos entre as contas **Ezequiel S** e **Barbosa**.
+O Rota Cheia ajuda a lotar o carro com antecedência analisando buscas públicas da BlaBlaCar, arquivos `.mhtml/.mht`, motoristas, horários, preços, lotação e possíveis conflitos entre as contas **Ezequiel S** e **Barbosa**.
 
 ## Corredor operacional
 
@@ -41,17 +41,21 @@ Nunca usar como identificador:
 - Expert
 - qualquer nível ou status da plataforma
 
-## MVP v0.1
+## Fluxo atual
 
-Primeira versão com foco em:
+1. **Planejar viagem**: origem, destino, conta, assentos, antecedência e eventos.
+2. **Escolher melhor data e horário**: ranking operacional com score.
+3. **SCAN BLA**: validação pública obrigatória por rota + data.
+4. **Decisão final**: ação, conta, origem, destino final, intermediárias, data, horário, preço sugerido, risco de conflito e status de validação.
+5. **Fallback**: upload `.mhtml/.mht` quando a leitura pública automática falhar.
+6. **Mensagens e avaliações**: textos rápidos para passageiros, bio curta e reformulador de avaliações.
 
-1. Upload manual de arquivos `.mhtml/.mht` da BlaBlaCar.
-2. Extração de link, origem, destino, data, motoristas, horários, preços e status.
-3. Detecção de Ezequiel S e Barbosa.
-4. Regra anti-duplicidade.
-5. Regra de conflito em Três Corações.
-6. Sugestão de ação somente após validação.
-7. Histórico em SQLite.
+## Decisões operacionais
+
+- Se Ezequiel S ou Barbosa já aparecer publicado naquela data/rota, o app não deve criar duplicado.
+- Se já estiver publicado, a decisão deve tender para **MANTER**, **ALTERAR HORÁRIO**, **ALTERAR PREÇO** ou **ALTERAR DESTINO FINAL**.
+- Se houver conflito em Três Corações entre Ezequiel S e Barbosa, o app bloqueia a duplicidade logística e sugere alterar o destino final.
+- Sem validação pública por data, a decisão fica bloqueada como não confirmada.
 
 ## Como rodar localmente
 
