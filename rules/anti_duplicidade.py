@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+import re
+
+from utils.normalizador_texto import sem_acentos
+
+
+def _normalizar_nome(nome: str | None) -> str:
+    return re.sub(r"\s+", " ", sem_acentos(nome)).strip().lower()
+
 
 def _conta_match(motorista: dict, conta: str) -> bool:
-    conta_normalizada = (conta or "").strip().lower()
-    if conta_normalizada == "ezequiel s":
-        return bool(motorista.get("eh_ezequiel"))
-    if conta_normalizada == "barbosa":
-        return bool(motorista.get("eh_barbosa"))
-    return False
+    conta_normalizada = _normalizar_nome(conta)
+    if not conta_normalizada:
+        return False
+    if motorista.get("eh_conta_ativa"):
+        return True
+    nome = _normalizar_nome(motorista.get("nome_motorista"))
+    if not nome:
+        return False
+    return nome == conta_normalizada or conta_normalizada in nome or nome in conta_normalizada
 
 
 def publicacao_da_conta(motoristas: list[dict], conta: str) -> dict | None:
