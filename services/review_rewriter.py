@@ -183,12 +183,12 @@ def reformular_avaliacao(
     if estilo not in ESTILOS_AVALIACAO:
         estilo = "Curta e natural"
 
+    if _tem_negativo(texto_limpo):
+        return "Não foi uma boa experiência. Não recomendo."
+
     sujeito = _sujeito(tipo)
     atributos = _detectar_atributos(texto_limpo, tipo)
     tem_recomendacao = _tem_recomendacao(texto_limpo)
-
-    if _tem_negativo(texto_limpo) and not tem_recomendacao:
-        return "Não foi uma boa experiência. Não recomendo."
 
     if atributos:
         frase_base = f"{sujeito} {_juntar_pt(atributos)}."
