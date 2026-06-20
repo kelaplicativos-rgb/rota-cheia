@@ -12,6 +12,10 @@ TEXTOS_RAPIDOS: dict[str, str] = {
 }
 
 
+def limpar_resultado_avaliacao() -> None:
+    st.session_state["inicio_avaliacao_resultado"] = ""
+
+
 def render_mensagens_avaliacoes_inicio() -> None:
     st.markdown("## 1. Mensagens e avaliacoes BlaBlaCar")
     st.markdown("Cole, digite para corrigir ou gere uma avaliacao pronta.")
@@ -28,7 +32,13 @@ def render_mensagens_avaliacoes_inicio() -> None:
     if modo == "Corrigir ou reformular":
         texto = st.text_area("Cole ou digite a avaliacao", height=120, key="inicio_avaliacao_original")
 
-    if st.button("Gerar avaliacao", type="primary", use_container_width=True, key="inicio_gerar_avaliacao"):
+    col_gerar, col_limpar = st.columns([2, 1])
+    with col_gerar:
+        gerar = st.button("Gerar avaliacao", type="primary", use_container_width=True, key="inicio_gerar_avaliacao")
+    with col_limpar:
+        st.button("Limpar", use_container_width=True, key="inicio_limpar_avaliacao", on_click=limpar_resultado_avaliacao)
+
+    if gerar:
         if modo == "Gerar do zero":
             st.session_state["inicio_avaliacao_resultado"] = gerar_avaliacao(tipo)
         elif not texto.strip():
