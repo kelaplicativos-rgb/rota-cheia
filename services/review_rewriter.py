@@ -202,12 +202,6 @@ def reformular_avaliacao(
     tipo: str = "Generica",
     estilo: str = "Curta e natural",
 ) -> str:
-    """Reformula uma avaliacao curta sem inventar fatos novos.
-
-    A funcao e deterministica para funcionar sem chave externa de IA. Ela preserva
-    o sentido da avaliacao colada pelo usuario e devolve uma frase pronta para
-    copiar e colar na BlaBlaCar.
-    """
     texto_limpo = limpar_texto(texto)
     if not texto_limpo:
         return ""
@@ -234,3 +228,15 @@ def reformular_avaliacao(
         return _frase_recomendacao(tipo, estilo)
 
     return _sentence_case(texto_limpo)
+
+
+def gerar_avaliacao(tipo: str = "Generica") -> str:
+    if tipo not in TIPOS_AVALIACAO:
+        tipo = "Generica"
+    if tipo == "Passageiro homem":
+        return "Passageiro educado, tranquilo e pontual. Recomendo com certeza!"
+    if tipo == "Passageira mulher":
+        return "Passageira educada, tranquila e pontual. Recomendo com certeza!"
+    if tipo == "Motorista":
+        return "Motorista educado, pontual e seguro. Recomendo a carona!"
+    return "Pessoa educada, tranquila e pontual. Recomendo com certeza!"
