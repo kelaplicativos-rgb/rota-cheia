@@ -232,6 +232,16 @@ def _sentence_case(texto: str) -> str:
     return texto[0].upper() + texto[1:] + "."
 
 
+def _fallback_reformulado(texto: str, tipo: str) -> str:
+    texto = limpar_texto(texto)
+    sujeito = _sujeito(tipo)
+    if not texto:
+        return gerar_avaliacao(tipo)
+    if len(texto.split()) <= 3:
+        return gerar_avaliacao(tipo)
+    return f"{sujeito} deixou uma boa impressão durante a viagem. Recomendo!"
+
+
 def reformular_avaliacao(
     texto: str,
     tipo: str = "Genérica",
@@ -258,9 +268,9 @@ def reformular_avaliacao(
         return frase
 
     if tem_recomendacao:
-        return _frase_recomendacao(tipo, estilo)
+        return f"{sujeito} passou uma boa impressão. {_frase_recomendacao(tipo, estilo)}"
 
-    return _sentence_case(texto_limpo)
+    return _fallback_reformulado(texto_limpo, tipo)
 
 
 def gerar_avaliacao(tipo: str = "Genérica") -> str:
