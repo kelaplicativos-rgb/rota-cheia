@@ -40,7 +40,9 @@ def render_mensagens_avaliacoes_inicio() -> None:
 
     if gerar:
         if modo == "Gerar do zero":
-            st.session_state["inicio_avaliacao_resultado"] = gerar_avaliacao(tipo)
+            indice = int(st.session_state.get("inicio_avaliacao_indice", 0))
+            st.session_state["inicio_avaliacao_indice"] = indice + 1
+            st.session_state["inicio_avaliacao_resultado"] = gerar_avaliacao(tipo, indice)
         elif not texto.strip():
             st.warning("Cole ou digite uma avaliação primeiro.")
         else:
