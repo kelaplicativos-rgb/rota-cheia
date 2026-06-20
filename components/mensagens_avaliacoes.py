@@ -6,8 +6,8 @@ from services.review_rewriter import TIPOS_AVALIACAO, gerar_avaliacao, reformula
 
 
 TEXTOS_RAPIDOS: dict[str, str] = {
-    "Confirmar reserva": "Oi! Tudo certo. Sua reserva esta confirmada. Vou avisar quando estiver indo para o ponto combinado.",
-    "A caminho": "Estou a caminho do ponto combinado. Aviso qualquer atualizacao importante.",
+    "Confirmar reserva": "Oi! Tudo certo. Sua reserva está confirmada. Vou avisar quando estiver indo para o ponto combinado.",
+    "A caminho": "Estou a caminho do ponto combinado. Aviso qualquer atualização importante.",
     "Combinar ponto": "Me confirme o ponto combinado para eu organizar a viagem direitinho.",
 }
 
@@ -17,8 +17,8 @@ def limpar_resultado_avaliacao() -> None:
 
 
 def render_mensagens_avaliacoes_inicio() -> None:
-    st.markdown("## 1. Mensagens e avaliacoes BlaBlaCar")
-    st.markdown("Cole, digite para corrigir ou gere uma avaliacao pronta.")
+    st.markdown("## 1. Mensagens e avaliações BlaBlaCar")
+    st.markdown("Cole, digite para corrigir ou gere uma avaliação pronta.")
 
     modo = st.radio(
         "O que deseja fazer?",
@@ -30,11 +30,11 @@ def render_mensagens_avaliacoes_inicio() -> None:
 
     texto = ""
     if modo == "Corrigir ou reformular":
-        texto = st.text_area("Cole ou digite a avaliacao", height=120, key="inicio_avaliacao_original")
+        texto = st.text_area("Cole ou digite a avaliação", height=120, key="inicio_avaliacao_original")
 
     col_gerar, col_limpar = st.columns([2, 1])
     with col_gerar:
-        gerar = st.button("Gerar avaliacao", type="primary", use_container_width=True, key="inicio_gerar_avaliacao")
+        gerar = st.button("Gerar avaliação", type="primary", use_container_width=True, key="inicio_gerar_avaliacao")
     with col_limpar:
         st.button("Limpar", use_container_width=True, key="inicio_limpar_avaliacao", on_click=limpar_resultado_avaliacao)
 
@@ -42,16 +42,16 @@ def render_mensagens_avaliacoes_inicio() -> None:
         if modo == "Gerar do zero":
             st.session_state["inicio_avaliacao_resultado"] = gerar_avaliacao(tipo)
         elif not texto.strip():
-            st.warning("Cole ou digite uma avaliacao primeiro.")
+            st.warning("Cole ou digite uma avaliação primeiro.")
         else:
             st.session_state["inicio_avaliacao_resultado"] = reformular_avaliacao(texto, tipo=tipo, estilo="Mais persuasiva")
 
     resultado = st.session_state.get("inicio_avaliacao_resultado", "")
     if resultado:
-        st.success("Avaliacao pronta para copiar:")
+        st.success("Avaliação pronta para copiar:")
         st.text_area("Resultado", value=resultado, height=95, key="inicio_avaliacao_resultado_box")
 
-    with st.expander("Textos rapidos", expanded=False):
+    with st.expander("Textos rápidos", expanded=False):
         texto_modelo = st.selectbox("Modelo", list(TEXTOS_RAPIDOS), key="inicio_texto_rapido_modelo")
         texto_base = st.text_area("Texto pronto", value=TEXTOS_RAPIDOS[texto_modelo], height=110, key="inicio_texto_rapido_base")
         if texto_base.strip():
