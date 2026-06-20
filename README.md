@@ -1,44 +1,44 @@
 # Rota Cheia
 
-App assistente de caronas para planejar, validar e organizar viagens no corredor Sao Paulo/Santo Andre ↔ Minas Gerais.
+App assistente de caronas para planejar, validar e organizar viagens no corredor São Paulo/Santo André ↔ Minas Gerais.
 
 ## Objetivo
 
-O Rota Cheia ajuda a lotar o carro com antecedencia analisando buscas publicas da BlaBlaCar, arquivos `.mhtml/.mht`, motoristas, horarios, precos, lotacao e possiveis conflitos entre as contas **Ezequiel S** e **Barbosa**.
+O Rota Cheia ajuda a lotar o carro com antecedência analisando buscas públicas da BlaBlaCar, arquivos `.mhtml/.mht`, motoristas, horários, preços, lotação e possíveis conflitos entre as contas **Ezequiel S** e **Barbosa**.
 
-## Primeiro modulo
+## Primeiro módulo
 
-O app deve começar por **Mensagens e avaliacoes BlaBlaCar**, porque este e o recurso mais rapido, mais usado e com maior chance de engajar o usuario logo na entrada.
+O app deve começar por **Mensagens e avaliações BlaBlaCar**, porque este é o recurso mais rápido, mais usado e com maior chance de engajar o usuário logo na entrada.
 
-Fluxo do modulo:
+Fluxo do módulo:
 
 1. Entrar no perfil do passageiro.
-2. Copiar uma avaliacao interessante.
+2. Copiar uma avaliação interessante.
 3. Colar no Rota Cheia.
 4. Reformular o texto.
-5. Copiar a avaliacao pronta para usar.
+5. Copiar a avaliação pronta para usar.
 
 ## Corredor operacional
 
-- Sao Paulo/SP ou Santo Andre/SP ↔ Extrema/MG
-- Sao Paulo/SP ou Santo Andre/SP ↔ Pouso Alegre/MG
-- Sao Paulo/SP ou Santo Andre/SP ↔ Tres Coracoes/MG
-- Sao Paulo/SP ou Santo Andre/SP ↔ Varginha/MG
-- Sao Paulo/SP ou Santo Andre/SP ↔ Sao Tome das Letras/MG
-- Cambuquira/MG e Campanha/MG podem ser consideradas como intermediarias quando ajudarem a completar o carro.
+- São Paulo/SP ou Santo André/SP ↔ Extrema/MG
+- São Paulo/SP ou Santo André/SP ↔ Pouso Alegre/MG
+- São Paulo/SP ou Santo André/SP ↔ Três Corações/MG
+- São Paulo/SP ou Santo André/SP ↔ Varginha/MG
+- São Paulo/SP ou Santo André/SP ↔ São Tomé das Letras/MG
+- Cambuquira/MG e Campanha/MG podem ser consideradas como intermediárias quando ajudarem a completar o carro.
 - Caxambu deve ser ignorada.
 
-## Regra obrigatoria
+## Regra obrigatória
 
-Antes de recomendar **CRIAR**, **PUBLICAR**, **MANTER**, **ALTERAR** ou **EXCLUIR**, o app precisa validar a busca publica da BlaBlaCar por **rota + data exata**.
+Antes de recomendar **CRIAR**, **PUBLICAR**, **MANTER**, **ALTERAR** ou **EXCLUIR**, o app precisa validar a busca pública da BlaBlaCar por **rota + data exata**.
 
-Se a busca publica por data nao estiver validada, a saida deve ser:
+Se a busca pública por data não estiver validada, a saída deve ser:
 
 ```txt
-nao confirmado / busca publica por data nao validada
+não confirmado / busca pública por data não validada
 ```
 
-## Identificadores validos
+## Identificadores válidos
 
 Usar apenas:
 
@@ -51,24 +51,24 @@ Nunca usar como identificador:
 - Super Driver
 - Embaixador
 - Expert
-- qualquer nivel ou status da plataforma
+- qualquer nível ou status da plataforma
 
 ## Fluxo atual
 
-1. **Mensagens e avaliacoes BlaBlaCar**: reformulador de avaliacoes e textos rapidos.
-2. **Planejar viagem**: origem, destino, conta, assentos, antecedencia e eventos.
-3. **Escolher melhor data e horario**: ranking operacional com score.
-4. **SCAN BLA**: validacao publica obrigatoria por rota + data.
-5. **Decisao final**: acao, conta, origem, destino final, intermediarias, data, horario, preco sugerido, risco de conflito e status de validacao.
-6. **Historico e agenda**: scans salvos e agenda operacional padrao.
-7. **Fallback**: upload `.mhtml/.mht` quando a leitura publica automatica falhar.
+1. **Mensagens e avaliações BlaBlaCar**: reformulador de avaliações e textos rápidos.
+2. **Planejar viagem**: origem, destino, conta, assentos, antecedência e eventos.
+3. **Escolher melhor data e horário**: ranking operacional com score.
+4. **SCAN BLA**: validação pública obrigatória por rota + data.
+5. **Decisão final**: ação, conta, origem, destino final, intermediárias, data, horário, preço sugerido, risco de conflito e status de validação.
+6. **Histórico e agenda**: scans salvos e agenda operacional padrão.
+7. **Fallback**: upload `.mhtml/.mht` quando a leitura pública automática falhar.
 
-## Decisoes operacionais
+## Decisões operacionais
 
-- Se Ezequiel S ou Barbosa ja aparecer publicado naquela data/rota, o app nao deve criar duplicado.
-- Se ja estiver publicado, a decisao deve tender para **MANTER**, **ALTERAR HORARIO**, **ALTERAR PRECO** ou **ALTERAR DESTINO FINAL**.
-- Se houver conflito em Tres Coracoes entre Ezequiel S e Barbosa, o app bloqueia a duplicidade logistica e sugere alterar o destino final.
-- Sem validacao publica por data, a decisao fica bloqueada como nao confirmada.
+- Se Ezequiel S ou Barbosa já aparecer publicado naquela data/rota, o app não deve criar duplicado.
+- Se já estiver publicado, a decisão deve tender para **MANTER**, **ALTERAR HORÁRIO**, **ALTERAR PREÇO** ou **ALTERAR DESTINO FINAL**.
+- Se houver conflito em Três Corações entre Ezequiel S e Barbosa, o app bloqueia a duplicidade logística e sugere alterar o destino final.
+- Sem validação pública por data, a decisão fica bloqueada como não confirmada.
 
 ## Como rodar localmente
 
