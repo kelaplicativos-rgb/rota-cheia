@@ -105,6 +105,33 @@ MASCULINO = {
     "organizada": "organizado",
 }
 
+AVALIACOES_PRONTAS = {
+    "Genérica": [
+        "Pessoa educada, tranquila e pontual. Recomendo com certeza!",
+        "Ótima companhia durante a viagem. Tudo correu muito bem, recomendo!",
+        "Pessoa respeitosa e agradável. Foi uma experiência tranquila, recomendo!",
+        "Tudo certo do início ao fim. Pessoa educada e confiável, recomendo!",
+    ],
+    "Passageiro homem": [
+        "Passageiro educado, tranquilo e pontual. Recomendo com certeza!",
+        "Passageiro respeitoso e de boa conversa. Viagem tranquila, recomendo!",
+        "Ótimo passageiro, chegou no horário e foi muito educado. Recomendo!",
+        "Passageiro gente boa e confiável. Tudo correu muito bem, recomendo!",
+    ],
+    "Passageira mulher": [
+        "Passageira educada, tranquila e pontual. Recomendo com certeza!",
+        "Passageira respeitosa e agradável. Viagem muito tranquila, recomendo!",
+        "Ótima passageira, chegou no horário e foi muito educada. Recomendo!",
+        "Passageira gente boa e confiável. Tudo correu muito bem, recomendo!",
+    ],
+    "Motorista": [
+        "Motorista educado, pontual e seguro. Recomendo a carona!",
+        "Ótima carona, motorista tranquilo e responsável. Recomendo!",
+        "Motorista pontual e cuidadoso. A viagem foi segura e agradável, recomendo!",
+        "Excelente experiência de carona. Motorista educado e confiável, recomendo!",
+    ],
+}
+
 
 def normalizar_tipo(tipo: str) -> str:
     return TIPOS_ALIASES.get(str(tipo or "").strip(), "Genérica")
@@ -273,12 +300,11 @@ def reformular_avaliacao(
     return _fallback_reformulado(texto_limpo, tipo)
 
 
-def gerar_avaliacao(tipo: str = "Genérica") -> str:
+def gerar_avaliacao(tipo: str = "Genérica", indice: int | None = None) -> str:
     tipo = normalizar_tipo(tipo)
-    if tipo == "Passageiro homem":
-        return "Passageiro educado, tranquilo e pontual. Recomendo com certeza!"
-    if tipo == "Passageira mulher":
-        return "Passageira educada, tranquila e pontual. Recomendo com certeza!"
-    if tipo == "Motorista":
-        return "Motorista educado, pontual e seguro. Recomendo a carona!"
-    return "Pessoa educada, tranquila e pontual. Recomendo com certeza!"
+    opcoes = AVALIACOES_PRONTAS.get(tipo, AVALIACOES_PRONTAS["Genérica"])
+    try:
+        posicao = int(indice or 0) % len(opcoes)
+    except (TypeError, ValueError):
+        posicao = 0
+    return opcoes[posicao]
