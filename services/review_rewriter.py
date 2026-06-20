@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 TIPOS_AVALIACAO = (
-    "Generica",
+    "Genérica",
     "Passageiro homem",
     "Passageira mulher",
     "Motorista",
@@ -11,33 +11,53 @@ TIPOS_AVALIACAO = (
 
 ESTILOS_AVALIACAO = (
     "Curta e natural",
-    "Mais simpatica",
+    "Mais simpática",
     "Mais profissional",
     "Bem direta",
     "Mais humana",
     "Mais persuasiva",
     "Criativa",
-    "Muito recomendavel",
+    "Muito recomendável",
 )
 
+TIPOS_ALIASES = {
+    "Generica": "Genérica",
+    "Genérica": "Genérica",
+    "Passageiro homem": "Passageiro homem",
+    "Passageira mulher": "Passageira mulher",
+    "Motorista": "Motorista",
+}
+
+ESTILOS_ALIASES = {
+    "Curta e natural": "Curta e natural",
+    "Mais simpatica": "Mais simpática",
+    "Mais simpática": "Mais simpática",
+    "Mais profissional": "Mais profissional",
+    "Bem direta": "Bem direta",
+    "Mais humana": "Mais humana",
+    "Mais persuasiva": "Mais persuasiva",
+    "Criativa": "Criativa",
+    "Muito recomendavel": "Muito recomendável",
+    "Muito recomendável": "Muito recomendável",
+}
 
 ATRIBUTOS_BASE = [
     (r"\bpontual\w*", "pontual"),
     (r"\beducad\w*", "educado"),
     (r"\btranquil\w*", "tranquilo"),
-    (r"\bagrad[áa]vel\w*", "agradavel"),
+    (r"\bagrad[áa]vel\w*", "agradável"),
     (r"\bgente\s+boa\b", "gente boa"),
-    (r"\bsimp[aá]tic\w*", "simpatico"),
+    (r"\bsimp[aá]tic\w*", "simpático"),
     (r"\bcomunicativ\w*", "comunicativo"),
     (r"\brespeitos\w*", "respeitoso"),
-    (r"\brespons[aá]vel\w*", "responsavel"),
+    (r"\brespons[aá]vel\w*", "responsável"),
     (r"\bsegur\w*", "seguro"),
     (r"\bparceir\w*", "parceiro"),
-    (r"\bconfi[aá]vel\w*", "confiavel"),
+    (r"\bconfi[aá]vel\w*", "confiável"),
     (r"\blegal\b", "legal"),
     (r"\borganiza\w*", "organizado"),
     (r"\bboa\s+companhia\b", "boa companhia"),
-    (r"\botim[ao]\s+companhia\b", "otima companhia"),
+    (r"\b[óo]tim[ao]\s+companhia\b", "ótima companhia"),
     (r"\bexcelente\b", "excelente"),
 ]
 
@@ -59,13 +79,14 @@ RECOMENDACAO = (
     "aprovado",
     "aprovada",
     "otima pessoa",
+    "ótima pessoa",
     "boa pessoa",
 )
 
 FEMININO = {
     "educado": "educada",
     "tranquilo": "tranquila",
-    "simpatico": "simpatica",
+    "simpático": "simpática",
     "comunicativo": "comunicativa",
     "respeitoso": "respeitosa",
     "seguro": "segura",
@@ -76,13 +97,21 @@ FEMININO = {
 MASCULINO = {
     "educada": "educado",
     "tranquila": "tranquilo",
-    "simpatica": "simpatico",
+    "simpática": "simpático",
     "comunicativa": "comunicativo",
     "respeitosa": "respeitoso",
     "segura": "seguro",
     "parceira": "parceiro",
     "organizada": "organizado",
 }
+
+
+def normalizar_tipo(tipo: str) -> str:
+    return TIPOS_ALIASES.get(str(tipo or "").strip(), "Genérica")
+
+
+def normalizar_estilo(estilo: str) -> str:
+    return ESTILOS_ALIASES.get(str(estilo or "").strip(), "Curta e natural")
 
 
 def limpar_texto(texto: str) -> str:
@@ -95,14 +124,16 @@ def _normalizar_para_busca(texto: str) -> str:
 
 
 def _genero(tipo: str) -> str:
+    tipo = normalizar_tipo(tipo)
     if tipo == "Passageiro homem":
         return "masculino"
-    if tipo in {"Passageira mulher", "Generica"}:
+    if tipo in {"Passageira mulher", "Genérica"}:
         return "feminino"
     return "neutro"
 
 
 def _sujeito(tipo: str) -> str:
+    tipo = normalizar_tipo(tipo)
     if tipo == "Passageiro homem":
         return "Passageiro"
     if tipo == "Passageira mulher":
@@ -151,19 +182,22 @@ def _juntar_pt(itens: list[str]) -> str:
 
 
 def _frase_recomendacao(tipo: str, estilo: str) -> str:
+    tipo = normalizar_tipo(tipo)
+    estilo = normalizar_estilo(estilo)
+
     if estilo == "Mais profissional":
         return "Recomendo para a comunidade."
-    if estilo == "Mais simpatica":
+    if estilo == "Mais simpática":
         return "Recomendo com certeza!"
     if estilo == "Bem direta":
         return "Recomendo!"
     if estilo == "Mais humana":
-        return "Foi uma experiencia muito tranquila. Recomendo!"
+        return "Foi uma experiência muito tranquila. Recomendo!"
     if estilo == "Mais persuasiva":
-        return "Pode ir sem preocupacao. Recomendo muito!"
+        return "Pode ir sem preocupação. Recomendo muito!"
     if estilo == "Criativa":
         return "Viagem leve, tranquila e muito positiva. Recomendo!"
-    if estilo == "Muito recomendavel":
+    if estilo == "Muito recomendável":
         return "Recomendo muito!"
 
     if tipo == "Passageiro homem":
@@ -176,6 +210,7 @@ def _frase_recomendacao(tipo: str, estilo: str) -> str:
 
 
 def _frase_base(sujeito: str, atributos: list[str], estilo: str) -> str:
+    estilo = normalizar_estilo(estilo)
     atributos_txt = _juntar_pt(atributos)
     if not atributos_txt:
         return ""
@@ -184,9 +219,9 @@ def _frase_base(sujeito: str, atributos: list[str], estilo: str) -> str:
     if estilo == "Mais persuasiva":
         return f"{sujeito} {atributos_txt}, excelente companhia para a viagem."
     if estilo == "Criativa":
-        return f"{sujeito} nota 10: {atributos_txt} do inicio ao fim."
-    if estilo == "Muito recomendavel":
-        return f"{sujeito} {atributos_txt}, experiencia excelente."
+        return f"{sujeito} nota 10: {atributos_txt} do início ao fim."
+    if estilo == "Muito recomendável":
+        return f"{sujeito} {atributos_txt}, experiência excelente."
     return f"{sujeito} {atributos_txt}."
 
 
@@ -199,20 +234,18 @@ def _sentence_case(texto: str) -> str:
 
 def reformular_avaliacao(
     texto: str,
-    tipo: str = "Generica",
+    tipo: str = "Genérica",
     estilo: str = "Curta e natural",
 ) -> str:
     texto_limpo = limpar_texto(texto)
     if not texto_limpo:
         return ""
 
-    if tipo not in TIPOS_AVALIACAO:
-        tipo = "Generica"
-    if estilo not in ESTILOS_AVALIACAO:
-        estilo = "Curta e natural"
+    tipo = normalizar_tipo(tipo)
+    estilo = normalizar_estilo(estilo)
 
     if _tem_negativo(texto_limpo):
-        return "Nao foi uma boa experiencia. Nao recomendo."
+        return "Não foi uma boa experiência. Não recomendo."
 
     sujeito = _sujeito(tipo)
     atributos = _detectar_atributos(texto_limpo, tipo)
@@ -230,9 +263,8 @@ def reformular_avaliacao(
     return _sentence_case(texto_limpo)
 
 
-def gerar_avaliacao(tipo: str = "Generica") -> str:
-    if tipo not in TIPOS_AVALIACAO:
-        tipo = "Generica"
+def gerar_avaliacao(tipo: str = "Genérica") -> str:
+    tipo = normalizar_tipo(tipo)
     if tipo == "Passageiro homem":
         return "Passageiro educado, tranquilo e pontual. Recomendo com certeza!"
     if tipo == "Passageira mulher":
