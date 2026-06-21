@@ -10,7 +10,7 @@ from typing import Iterable
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
-from scanner_bla import TripCard
+from scanner_bla import CHROMIUM_ARGS, TripCard, _launch_chromium
 
 
 @dataclass
@@ -127,7 +127,7 @@ def parse_trip_detail_from_html(html: str, card: TripCard) -> TripDetail:
 
 async def scrape_trip_detail(card: TripCard, headless: bool = True, timeout_ms: int = 45000) -> TripDetail:
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
+        browser = await _launch_chromium(p, headless=headless)
         context = await browser.new_context(locale="pt-BR")
         page = await context.new_page()
         await page.goto(card.url, wait_until="domcontentloaded", timeout=timeout_ms)
