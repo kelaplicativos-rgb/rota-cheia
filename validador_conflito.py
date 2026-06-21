@@ -35,15 +35,41 @@ def detectar_conta(nome_motorista: str | None) -> str | None:
     return None
 
 
+def resultado_nao_confirmado(motivo: str | None = None) -> ValidacaoResultado:
+    return ValidacaoResultado(
+        "NAO_CONFIRMADO",
+        None,
+        motivo or "Busca pública por rota + data exata não validada.",
+        "não avaliado",
+        "não confirmado / busca pública por data não validada",
+    )
+
+
 def validar_conflitos(cards: Iterable[object], data: str) -> ValidacaoResultado:
+    cards_lista = list(cards)
+    if not data or not cards_lista:
+        return resultado_nao_confirmado()
+
+    motoristas_vazios = [card for card in cards_lista if not normalizar(getattr(card, "driver", None))]
+    if motoristas_vazios:
+        return resultado_nao_confirmado(
+            "Motorista não foi captado em uma ou mais caronas. Não liberar CRIAR/PUBLICAR."
+        )
+
     encontrados: list[tuple[str, object]] = []
-    for card in cards:
+    for card in cards_lista:
         conta = detectar_conta(getattr(card, "driver", None))
         if conta:
             encontrados.append((conta, card))
 
     if not encontrados:
-        return ValidacaoResultado("CRIAR", None, "Nenhuma conta Ezequiel S ou Barbosa localizada na rota/data validada.", "baixo", "validado")
+        return ValidacaoResultado(
+            "CRIAR",
+            None,
+            "Nenhuma conta Ezequiel S ou Barbosa localizada na rota/data validada.",
+            "baixo",
+            "validado",
+        )
 
     contas_tc = {
         conta
@@ -52,11 +78,19 @@ def validar_conflitos(cards: Iterable[object], data: str) -> ValidacaoResultado:
     }
 
     if "Ezequiel S" in contas_tc and "Barbosa" in contas_tc:
-        return ValidacaoResultado("CONFLITO", "Ezequiel S / Barbosa", f"As duas contas aparecem envolvendo Três Corações em {data}.", "alto", "validado")
+        return ValidacaoResultado(
+            "CONFLITO",
+            "Ezequiel S / Barbosa",
+            f"As duas contas aparecem envolvendo Três Corações em {data}.",
+            "alto",
+            "validado",
+        )
 
     conta = encontrados[0][0]
-    return ValidacaoResultado("MANTER", conta, f"{conta} já aparece publicado(a). Não criar duplicado.", "baixo", "validado")
-
-
-def resultado_nao_confirmado() -> ValidacaoResultado:
-    return ValidacaoResultado("NAO_CONFIRMADO", None, "Busca pública por rota + data exata não validada.", "não avaliado", "não confirmado / busca pública por data não validada")
+    return ValidacaoResultado(
+        "MANTER",
+        conta,
+        f"{conta} já aparece publicado(a). Não criar duplicado.",
+        "baixo",
+        "validado",
+    )
