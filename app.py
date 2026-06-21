@@ -65,12 +65,99 @@ st.caption("Mensagens prontas + SCAN BLA Modo Ouro")
 aba_msg, aba_scan = st.tabs(["Mensagens e avaliações", "SCAN BLA Modo Ouro"])
 
 with aba_msg:
-    st.subheader("Reformular mensagens e avaliações")
-    texto = st.text_area("Cole aqui a mensagem ou avaliação", height=150)
-    tom = st.selectbox("Tom", ["curto", "educado", "persuasivo", "avaliacao"], index=1)
-    if st.button("Reformular", type="primary"):
-        resultado = reformular_mensagem(texto, tom=tom)
-        st.text_area("Pronto para copiar", value=resultado.rewritten, height=160)
+    st.subheader("Mensagens e avaliações BlaBlaCar")
+    st.write(
+        "Cole uma mensagem, resposta de passageiro ou avaliação. "
+        "O app sempre retorna versões prontas para copiar."
+    )
+
+    exemplos = {
+        "Resposta para atraso": (
+            "Não você demorou a responder eu tava desesperada achando que não ia arrumar "
+            "e arrumei passagem já de ônibus ida e volta."
+        ),
+        "Confirmação de reserva": (
+            "Vi sua solicitação, está tudo confirmado. Te aviso quando estiver a caminho do local combinado."
+        ),
+        "Avaliação simples": "Gente boa, educado e pontual. Recomendo a carona.",
+        "Aviso de rodovia": "Não entro dentro das cidades, apenas trevos ou postos na rodovia.",
+    }
+
+    if "msg_input" not in st.session_state:
+        st.session_state.msg_input = ""
+
+    col_exemplo, col_bio, col_limpar = st.columns([2, 1, 1])
+    with col_exemplo:
+        exemplo = st.selectbox("Exemplo rápido para testar", [""] + list(exemplos.keys()))
+    with col_bio:
+        st.write("")
+        st.write("")
+        usar_bio = st.button("Usar bio curta", width="stretch")
+    with col_limpar:
+        st.write("")
+        st.write("")
+        limpar = st.button("Limpar", width="stretch")
+
+    if exemplo:
+        st.session_state.msg_input = exemplos[exemplo]
+
+    if usar_bio:
+        st.session_state.msg_input = BIO_CURTA
+        st.session_state.pop("rewrite_result", None)
+        st.rerun()
+
+    if limpar:
+        st.session_state.msg_input = ""
+        st.session_state.pop("rewrite_result", None)
+        st.rerun()
+
+    texto = st.text_area(
+        "Cole aqui a mensagem ou avaliação",
+        key="msg_input",
+        height=150,
+        placeholder="Ex.: Pontual, educado, gente boa. Recomendo a carona.",
+    )
+
+    tom = st.selectbox(
+        "Versão principal",
+        ["educado", "persuasivo", "curto", "avaliacao"],
+        format_func={
+            "educado": "Mais educada",
+            "persuasivo": "Mais persuasiva",
+            "curto": "Mais curta",
+            "avaliacao": "Avaliação BlaBlaCar",
+        }.get,
+        index=0,
+    )
+
+    reformular = st.button("Reformular agora", type="primary", width="stretch")
+
+    if reformular:
+        if not texto.strip():
+            st.warning("Cole uma mensagem primeiro.")
+            st.session_state.pop("rewrite_result", None)
+        else:
+            st.session_state.rewrite_result = reformular_mensagem(texto, tom=tom)
+
+    resultado = st.session_state.get("rewrite_result")
+    if resultado and resultado.original:
+        st.success("Pronto. Escolha uma versão e copie.")
+        st.text_area(
+            "Versão principal",
+            value=resultado.rewritten,
+            height=120,
+            key="rewrite_principal",
+        )
+
+        for indice, versao in enumerate(resultado.variants, start=1):
+            st.markdown(f"**{indice}. {versao.titulo}**")
+            st.text_area(
+                f"Copiar — {versao.titulo}",
+                value=versao.texto,
+                height=110,
+                key=f"rewrite_variant_{indice}",
+            )
+
     st.divider()
     st.write("Bio curta sugerida")
     st.code(BIO_CURTA, language="text")
