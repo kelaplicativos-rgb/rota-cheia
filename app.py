@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import tempfile
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -16,6 +18,24 @@ from scanner_bla import (
 )
 from trip_detail_scraper import scrape_many_sync
 from validador_conflito import resultado_nao_confirmado, validar_conflitos
+
+
+APP_TZ = ZoneInfo("America/Sao_Paulo")
+
+
+def hoje_sp() -> date:
+    return datetime.now(APP_TZ).date()
+
+
+def parse_data_iso(valor: str) -> date | None:
+    valor = (valor or "").strip()[:10]
+    if not valor:
+        return None
+    try:
+        return date.fromisoformat(valor)
+    except ValueError:
+        return None
+
 
 st.set_page_config(page_title="Rota Cheia", page_icon="🚗", layout="wide")
 
@@ -47,7 +67,26 @@ with aba_scan:
     if st.button("Rodar SCAN BLA", type="primary"):
         cards = []
         validado = False
-        data_efetiva = (data or "").strip() or extrair_data_do_link(link or "")
+        data_link = extrair_data_do_link(link or "")
+        data_efetiva = (data or "").strip() or data_link
+        data_efetiva_dt = parse_data_iso(data_efetiva)
+
+        if data_link:
+            st.caption(f"Data detectada no link: {data_link}")
+
+        if data_efetiva and data_efetiva_dt is None:
+            st.error(f"Data inválida: {data_efetiva}. Use o formato AAAA-MM-DD, exemplo: 2026-06-26.")
+            st.warning(resultado_nao_confirmado().status_validacao)
+            st.stop()
+
+        if data_efetiva_dt and data_efetiva_dt < hoje_sp():
+            st.error(
+                f"Data no passado: {data_efetiva_dt.isoformat()}. "
+                "A busca pública da BlaBlaCar normalmente não retorna viagens antigas. "
+                f"Use uma data a partir de {hoje_sp().isoformat()}."
+            )
+            st.warning(resultado_nao_confirmado().status_validacao)
+            st.stop()
 
         if arquivo is not None:
             with tempfile.NamedTemporaryFile(delete=False, suffix=Path(arquivo.name).suffix) as tmp:
@@ -64,6 +103,7 @@ with aba_scan:
                 st.error(f"Não consegui abrir a busca pública: {exc}")
 
         if not validado or not data_efetiva:
+            st.warning("Nenhuma carona pública foi encontrada para esta rota/data ou a página não pôde ser validada.")
             st.warning(resultado_nao_confirmado().status_validacao)
             st.stop()
 
