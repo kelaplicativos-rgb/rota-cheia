@@ -16,7 +16,7 @@ from scanner_bla import (
     parse_trip_cards_from_html,
     scan_sync,
 )
-from trip_detail_scraper import scrape_many_sync
+from trip_detail_scraper import TripDetail, scrape_many_sync
 from validador_conflito import resultado_nao_confirmado, validar_conflitos
 
 
@@ -145,7 +145,14 @@ with aba_scan:
 
         detalhes = []
         if arquivo_historico:
-            st.info("Por ser arquivo histórico, não vou abrir detalhes online antigos. Use o quadro acima para validar motoristas/horários/preços salvos no MHTML.")
+            st.info("Por ser arquivo histórico, não vou abrir detalhes online antigos. Vou gerar ranking pelos sinais públicos salvos no MHTML.")
+            detalhes = [
+                TripDetail(card=card, detail_status="arquivo histórico / passageiros online não abertos")
+                for card in cards
+            ]
+            relatorio = gerar_relatorio_markdown(detalhes)
+            st.markdown(relatorio)
+            st.download_button("Baixar relatório .md", relatorio, file_name="scan_bla_ranking.md")
         elif acessiveis:
             with st.spinner("Entrando nas caronas para buscar passageiros visíveis..."):
                 detalhes = scrape_many_sync(acessiveis, headless=not navegador_visivel)
