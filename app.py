@@ -60,7 +60,7 @@ with aba_scan:
             st.stop()
 
         st.success(f"Busca validada. Caronas encontradas: {len(cards)}")
-        st.dataframe([card.__dict__ for card in cards], use_container_width=True)
+        st.dataframe([card.__dict__ for card in cards], width="stretch")
         validacao = validar_conflitos(cards, data=data)
         st.info(f"Ação: {validacao.acao} — {validacao.motivo}")
         acessiveis = filtrar_caronas_acessiveis(cards, incluir_cheias=incluir_cheias)
