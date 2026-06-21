@@ -170,9 +170,9 @@ def render_diagnostics_panel() -> None:
             build_report(),
             file_name="diagnostico_rota_cheia.txt",
             mime="text/plain",
-            width="stretch",
+            use_container_width=True,
         )
 
-        if st.button("Limpar diagnóstico", width="stretch"):
+        if st.button("Limpar diagnóstico", use_container_width=True):
             clear_events()
             st.rerun()
