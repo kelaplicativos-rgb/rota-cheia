@@ -7,7 +7,13 @@ import streamlit as st
 
 from message_rewriter import BIO_CURTA, reformular_mensagem
 from ranking_passageiros import gerar_relatorio_markdown
-from scanner_bla import filtrar_caronas_acessiveis, load_html_or_mhtml, parse_trip_cards_from_html, scan_sync
+from scanner_bla import (
+    extrair_data_do_link,
+    filtrar_caronas_acessiveis,
+    load_html_or_mhtml,
+    parse_trip_cards_from_html,
+    scan_sync,
+)
 from trip_detail_scraper import scrape_many_sync
 from validador_conflito import resultado_nao_confirmado, validar_conflitos
 
@@ -41,6 +47,8 @@ with aba_scan:
     if st.button("Rodar SCAN BLA", type="primary"):
         cards = []
         validado = False
+        data_efetiva = (data or "").strip() or extrair_data_do_link(link or "")
+
         if arquivo is not None:
             with tempfile.NamedTemporaryFile(delete=False, suffix=Path(arquivo.name).suffix) as tmp:
                 tmp.write(arquivo.read())
@@ -55,19 +63,40 @@ with aba_scan:
             except Exception as exc:
                 st.error(f"Não consegui abrir a busca pública: {exc}")
 
-        if not validado:
+        if not validado or not data_efetiva:
             st.warning(resultado_nao_confirmado().status_validacao)
             st.stop()
 
-        st.success(f"Busca validada. Caronas encontradas: {len(cards)}")
+        st.success(f"Busca pública carregada. Caronas encontradas: {len(cards)}")
+        st.caption(f"Data validada: {data_efetiva}")
         st.dataframe([card.__dict__ for card in cards], width="stretch")
-        validacao = validar_conflitos(cards, data=data)
-        st.info(f"Ação: {validacao.acao} — {validacao.motivo}")
+
         acessiveis = filtrar_caronas_acessiveis(cards, incluir_cheias=incluir_cheias)
         st.write(f"Caronas para abrir por dentro: {len(acessiveis)}")
+
+        detalhes = []
+        detalhes_com_erro = False
         if acessiveis:
             with st.spinner("Entrando nas caronas para buscar passageiros visíveis..."):
                 detalhes = scrape_many_sync(acessiveis, headless=not navegador_visivel)
+            detalhes_com_erro = any(
+                (detalhe.detail_status or "").casefold().startswith("erro ao abrir detalhe")
+                for detalhe in detalhes
+            )
             relatorio = gerar_relatorio_markdown(detalhes)
             st.markdown(relatorio)
             st.download_button("Baixar relatório .md", relatorio, file_name="scan_bla_ranking.md")
+        else:
+            st.info("Nenhuma carona acessível para abertura interna nesta busca.")
+
+        validacao = validar_conflitos(cards, data=data_efetiva)
+        if detalhes_com_erro and validacao.acao == "CRIAR":
+            validacao = resultado_nao_confirmado()
+            st.warning("Abertura interna das caronas falhou. Não vou liberar CRIAR/PUBLICAR sem validação completa.")
+
+        if validacao.acao == "NAO_CONFIRMADO":
+            st.warning(validacao.status_validacao)
+        elif validacao.acao == "CONFLITO":
+            st.error(f"Ação: {validacao.acao} — {validacao.motivo}")
+        else:
+            st.info(f"Ação: {validacao.acao} — {validacao.motivo}")
