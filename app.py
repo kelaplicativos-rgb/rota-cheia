@@ -72,10 +72,7 @@ with aba_msg:
     )
 
     exemplos = {
-        "Resposta para atraso": (
-            "Não você demorou a responder eu tava desesperada achando que não ia arrumar "
-            "e arrumei passagem já de ônibus ida e volta."
-        ),
+        "Resposta para atraso": "Você demorou para responder e eu acabei comprando passagem de ônibus.",
         "Confirmação de reserva": (
             "Vi sua solicitação, está tudo confirmado. Te aviso quando estiver a caminho do local combinado."
         ),
@@ -98,8 +95,14 @@ with aba_msg:
         st.write("")
         limpar = st.button("Limpar", width="stretch")
 
-    if exemplo:
+    if "ultimo_exemplo_msg" not in st.session_state:
+        st.session_state.ultimo_exemplo_msg = ""
+
+    if exemplo and exemplo != st.session_state.ultimo_exemplo_msg:
         st.session_state.msg_input = exemplos[exemplo]
+        st.session_state.pop("rewrite_result", None)
+
+    st.session_state.ultimo_exemplo_msg = exemplo
 
     if usar_bio:
         st.session_state.msg_input = BIO_CURTA
