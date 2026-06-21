@@ -12,7 +12,7 @@ from ranking_passageiros import gerar_relatorio_markdown
 from scanner_bla import (
     extrair_data_do_link,
     filtrar_caronas_acessiveis,
-    load_html_or_mhtml,
+    load_html_or_mhtml_with_source,
     parse_trip_cards_from_html,
     scan_sync,
 )
@@ -35,6 +35,26 @@ def parse_data_iso(valor: str) -> date | None:
         return date.fromisoformat(valor)
     except ValueError:
         return None
+
+
+def validar_data_entrada(data_efetiva: str, *, permite_historico: bool) -> tuple[date | None, bool]:
+    data_dt = parse_data_iso(data_efetiva)
+    if data_efetiva and data_dt is None:
+        st.error(f"Data inválida: {data_efetiva}. Use o formato AAAA-MM-DD, exemplo: 2026-06-26.")
+        st.warning(resultado_nao_confirmado().status_validacao)
+        st.stop()
+
+    historico = bool(data_dt and data_dt < hoje_sp())
+    if historico and not permite_historico:
+        st.error(
+            f"Data no passado: {data_dt.isoformat()}. "
+            "A busca pública da BlaBlaCar normalmente não retorna viagens antigas. "
+            f"Use uma data a partir de {hoje_sp().isoformat()}."
+        )
+        st.warning(resultado_nao_confirmado().status_validacao)
+        st.stop()
+
+    return data_dt, historico
 
 
 st.set_page_config(page_title="Rota Cheia", page_icon="🚗", layout="wide")
@@ -67,35 +87,44 @@ with aba_scan:
     if st.button("Rodar SCAN BLA", type="primary"):
         cards = []
         validado = False
+        detalhes_com_erro = False
+        arquivo_historico = False
+        fonte_arquivo_url = ""
+
         data_link = extrair_data_do_link(link or "")
         data_efetiva = (data or "").strip() or data_link
-        data_efetiva_dt = parse_data_iso(data_efetiva)
 
         if data_link:
-            st.caption(f"Data detectada no link: {data_link}")
-
-        if data_efetiva and data_efetiva_dt is None:
-            st.error(f"Data inválida: {data_efetiva}. Use o formato AAAA-MM-DD, exemplo: 2026-06-26.")
-            st.warning(resultado_nao_confirmado().status_validacao)
-            st.stop()
-
-        if data_efetiva_dt and data_efetiva_dt < hoje_sp():
-            st.error(
-                f"Data no passado: {data_efetiva_dt.isoformat()}. "
-                "A busca pública da BlaBlaCar normalmente não retorna viagens antigas. "
-                f"Use uma data a partir de {hoje_sp().isoformat()}."
-            )
-            st.warning(resultado_nao_confirmado().status_validacao)
-            st.stop()
+            st.caption(f"Data detectada no link informado: {data_link}")
 
         if arquivo is not None:
             with tempfile.NamedTemporaryFile(delete=False, suffix=Path(arquivo.name).suffix) as tmp:
                 tmp.write(arquivo.read())
                 tmp_path = tmp.name
-            html = load_html_or_mhtml(tmp_path)
-            cards = parse_trip_cards_from_html(html, base_url=link or "https://www.blablacar.com.br")
+
+            documento = load_html_or_mhtml_with_source(tmp_path)
+            fonte_arquivo_url = documento.source_url
+            if fonte_arquivo_url:
+                data_arquivo = extrair_data_do_link(fonte_arquivo_url)
+                st.caption(f"Link detectado no arquivo MHTML: {fonte_arquivo_url}")
+                if data_arquivo:
+                    st.caption(f"Data detectada no arquivo MHTML: {data_arquivo}")
+                if not data_efetiva:
+                    data_efetiva = data_arquivo
+
+            _, arquivo_historico = validar_data_entrada(data_efetiva, permite_historico=True)
+            if arquivo_historico:
+                st.warning(
+                    "Arquivo MHTML histórico: vou extrair e mostrar os dados, mas não vou liberar "
+                    "CRIAR/PUBLICAR/MANTER/ALTERAR/EXCLUIR sem uma busca pública atual por data."
+                )
+
+            base_url = link or fonte_arquivo_url or "https://www.blablacar.com.br"
+            cards = parse_trip_cards_from_html(documento.html, base_url=base_url)
             validado = bool(cards)
+
         elif link:
+            validar_data_entrada(data_efetiva, permite_historico=False)
             try:
                 cards = scan_sync(link, headless=not navegador_visivel)
                 validado = bool(cards)
@@ -107,16 +136,17 @@ with aba_scan:
             st.warning(resultado_nao_confirmado().status_validacao)
             st.stop()
 
-        st.success(f"Busca pública carregada. Caronas encontradas: {len(cards)}")
-        st.caption(f"Data validada: {data_efetiva}")
+        st.success(f"Busca carregada. Caronas encontradas: {len(cards)}")
+        st.caption(f"Data analisada: {data_efetiva}")
         st.dataframe([card.__dict__ for card in cards], width="stretch")
 
         acessiveis = filtrar_caronas_acessiveis(cards, incluir_cheias=incluir_cheias)
         st.write(f"Caronas para abrir por dentro: {len(acessiveis)}")
 
         detalhes = []
-        detalhes_com_erro = False
-        if acessiveis:
+        if arquivo_historico:
+            st.info("Por ser arquivo histórico, não vou abrir detalhes online antigos. Use o quadro acima para validar motoristas/horários/preços salvos no MHTML.")
+        elif acessiveis:
             with st.spinner("Entrando nas caronas para buscar passageiros visíveis..."):
                 detalhes = scrape_many_sync(acessiveis, headless=not navegador_visivel)
             detalhes_com_erro = any(
@@ -129,7 +159,13 @@ with aba_scan:
         else:
             st.info("Nenhuma carona acessível para abertura interna nesta busca.")
 
-        validacao = validar_conflitos(cards, data=data_efetiva)
+        if arquivo_historico:
+            validacao = resultado_nao_confirmado(
+                "Arquivo MHTML histórico analisado. Ação operacional exige busca pública atual por rota + data exata."
+            )
+        else:
+            validacao = validar_conflitos(cards, data=data_efetiva)
+
         if detalhes_com_erro and validacao.acao == "CRIAR":
             validacao = resultado_nao_confirmado()
             st.warning("Abertura interna das caronas falhou. Não vou liberar CRIAR/PUBLICAR sem validação completa.")
