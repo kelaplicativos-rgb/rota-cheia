@@ -7,8 +7,11 @@ passageiros fica no módulo trip_detail_scraper.py.
 from __future__ import annotations
 
 import asyncio
+import os
 import quopri
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -18,6 +21,7 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
 BLABLACAR_BASE = "https://www.blablacar.com.br"
+CHROMIUM_ARGS = ["--no-sandbox", "--disable-dev-shm-usage"]
 
 
 @dataclass
@@ -35,6 +39,34 @@ class TripCard:
     @property
     def is_full(self) -> bool:
         return "cheio" in self.status.casefold()
+
+
+def _ensure_chromium_installed() -> None:
+    """Instala o Chromium do Playwright quando o ambiente ainda não tem browser.
+
+    No Streamlit Cloud o pacote Python pode ser instalado sem o binário do
+    navegador. Esta rotina tenta baixar o Chromium na primeira execução real do
+    scanner, evitando falha do tipo "Executable doesn't exist".
+    """
+    if os.environ.get("ROTACHEIA_SKIP_PLAYWRIGHT_INSTALL") == "1":
+        return
+    subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+async def _launch_chromium(p, headless: bool):
+    try:
+        return await p.chromium.launch(headless=headless, args=CHROMIUM_ARGS)
+    except Exception as exc:
+        msg = str(exc).casefold()
+        if "executable doesn't exist" not in msg and "browser executable" not in msg:
+            raise
+        _ensure_chromium_installed()
+        return await p.chromium.launch(headless=headless, args=CHROMIUM_ARGS)
 
 
 def decode_mhtml_bytes(data: bytes) -> str:
@@ -153,7 +185,7 @@ async def _auto_scroll(page, max_scrolls: int = 18) -> None:
 
 async def scan_search_page(search_url: str, headless: bool = True, timeout_ms: int = 45000) -> list[TripCard]:
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=headless)
+        browser = await _launch_chromium(p, headless=headless)
         context = await browser.new_context(locale="pt-BR")
         page = await context.new_page()
         await page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_ms)
