@@ -46,7 +46,7 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Apply card selector patch
+      - name: Apply automation safety patch
         working-directory: android-avaliador
         run: python tools/patch_automation.py
 
@@ -61,14 +61,18 @@ jobs:
               app/src/main/assets/rotaai-part5-debug.js > decoded/rotaai.js
           node --check decoded/rotaai.js
           node --check app/src/main/assets/generator.js
-          grep -q "card-below-v1" app/src/main/assets/rotaai-part2.js
-          grep -q "card-below-v1" app/src/main/assets/rotaai-part4.js
+          grep -q "trip-summary-v2" app/src/main/assets/rotaai-part2.js
+          grep -q "exact-rating-v2" app/src/main/assets/rotaai-part4.js
           grep -q "stopAll" app/src/main/assets/rotaai-part5-debug.js
           grep -q "Exportar log" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
 
       - name: Test pending passenger filter
         working-directory: android-avaliador
         run: node tests/pending-review-filter.test.js
+
+      - name: Test exact rating selector safety
+        working-directory: android-avaliador
+        run: node tests/selector-safety.test.js
 
       - name: Test casual review generator
         working-directory: android-avaliador
