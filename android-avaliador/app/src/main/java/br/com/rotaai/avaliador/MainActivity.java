@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.SafeBrowsingResponse;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -27,11 +28,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.util.Base64;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
-import java.io.ByteArrayInputStream;
 import java.util.zip.GZIPInputStream;
 
 public final class MainActivity extends Activity {
@@ -40,6 +41,7 @@ public final class MainActivity extends Activity {
 
     private WebView webView;
     private ProgressBar progressBar;
+    private TextView statusText;
     private String injectionScript;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -76,13 +78,13 @@ public final class MainActivity extends Activity {
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
         toolbar.setGravity(Gravity.CENTER_VERTICAL);
-        toolbar.setPadding(dp(8), dp(6), dp(8), dp(6));
+        toolbar.setPadding(dp(10), dp(4), dp(8), dp(4));
         toolbar.setBackgroundColor(Color.rgb(0, 106, 106));
 
         TextView title = new TextView(this);
-        title.setText("RotaAi Avaliações");
+        title.setText("RotaAi");
         title.setTextColor(Color.WHITE);
-        title.setTextSize(18);
+        title.setTextSize(19);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         toolbar.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
@@ -96,32 +98,55 @@ public final class MainActivity extends Activity {
         home.setOnClickListener(v -> webView.loadUrl(HOME_URL));
         toolbar.addView(home);
 
-        Button panel = toolbarButton("Painel");
-        panel.setOnClickListener(v -> webView.evaluateJavascript(
-                "window.RotaAiAndroid && window.RotaAiAndroid.openPanel && window.RotaAiAndroid.openPanel();",
-                null));
-        toolbar.addView(panel);
-
         progressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         progressBar.setMax(100);
         progressBar.setProgress(0);
         progressBar.setVisibility(View.GONE);
 
+        statusText = new TextView(this);
+        statusText.setText("Entre na conta e toque em Revisar pendentes.");
+        statusText.setTextSize(12);
+        statusText.setTextColor(Color.rgb(30, 75, 75));
+        statusText.setBackgroundColor(Color.rgb(232, 247, 246));
+        statusText.setPadding(dp(10), dp(6), dp(10), dp(6));
+        statusText.setMaxLines(2);
+
         webView = new WebView(this);
-        root.addView(toolbar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58)));
+
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.HORIZONTAL);
+        bottomBar.setGravity(Gravity.CENTER);
+        bottomBar.setPadding(dp(6), dp(6), dp(6), dp(6));
+        bottomBar.setBackgroundColor(Color.WHITE);
+
+        Button review = actionButton("Revisar pendentes", true);
+        review.setOnClickListener(v -> runCommand("window.RotaAiAndroid.startSmartReview()"));
+        bottomBar.addView(review, new LinearLayout.LayoutParams(0, dp(52), 1.25f));
+
+        Button approve = actionButton("Aprovar / próxima", false);
+        approve.setOnClickListener(v -> runCommand("window.RotaAiAndroid.moveReviewNext(true)"));
+        bottomBar.addView(approve, new LinearLayout.LayoutParams(0, dp(52), 1f));
+
+        Button publish = actionButton("Publicar", true);
+        publish.setOnClickListener(v -> runCommand("window.RotaAiAndroid.startPublish()"));
+        bottomBar.addView(publish, new LinearLayout.LayoutParams(0, dp(52), 0.85f));
+
+        root.addView(toolbar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
         root.addView(progressBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
+        root.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(webView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(bottomBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
         setContentView(root);
     }
 
     private Button toolbarButton(String text) {
         Button button = new Button(this);
         button.setText(text);
-        button.setTextSize(11);
+        button.setTextSize(12);
         button.setAllCaps(false);
         button.setTextColor(Color.WHITE);
         button.setBackgroundColor(Color.TRANSPARENT);
-        button.setPadding(dp(5), 0, dp(5), 0);
+        button.setPadding(dp(6), 0, dp(6), 0);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setMinHeight(0);
@@ -129,7 +154,21 @@ public final class MainActivity extends Activity {
         return button;
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private Button actionButton(String text, boolean primary) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setTextSize(11);
+        button.setAllCaps(false);
+        button.setTextColor(primary ? Color.WHITE : Color.rgb(0, 90, 90));
+        button.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                primary ? Color.rgb(0, 106, 106) : Color.rgb(230, 245, 244)));
+        button.setPadding(dp(4), 0, dp(4), 0);
+        button.setMinWidth(0);
+        button.setMinimumWidth(0);
+        return button;
+    }
+
+    @SuppressLint({"SetJavaScriptEnabled", "JavascriptInterface"})
     private void configureWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -146,16 +185,16 @@ public final class MainActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
+        settings.setTextZoom(100);
         settings.setMediaPlaybackRequiresUserGesture(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " RotaAiAvaliador/0.3.0");
-        if (android.os.Build.VERSION.SDK_INT >= 26) {
-            settings.setSafeBrowsingEnabled(true);
-        }
+        settings.setUserAgentString(settings.getUserAgentString() + " RotaAiAvaliador/0.4.0");
+        if (android.os.Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
+        webView.addJavascriptInterface(new AppBridge(), "RotaAiNative");
         WebView.setWebContentsDebuggingEnabled(false);
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -186,7 +225,8 @@ public final class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 injectIfAllowed(url);
-                handler.postDelayed(() -> injectIfAllowed(webView.getUrl()), 900);
+                handler.postDelayed(() -> injectIfAllowed(webView.getUrl()), 450);
+                handler.postDelayed(() -> injectIfAllowed(webView.getUrl()), 1300);
             }
 
             @Override
@@ -209,11 +249,25 @@ public final class MainActivity extends Activity {
         });
     }
 
+    private void runCommand(String command) {
+        injectIfAllowed(webView.getUrl());
+        handler.postDelayed(() -> webView.evaluateJavascript(
+                "(function(){try{if(!window.RotaAiAndroid)return 'missing';" + command
+                        + ";return 'ok';}catch(e){return 'error:'+String(e&&e.message||e);}})()",
+                result -> {
+                    if (result == null) return;
+                    if (result.contains("missing")) {
+                        Toast.makeText(this, "A automação ainda está carregando. Tente novamente em um instante.", Toast.LENGTH_SHORT).show();
+                        injectIfAllowed(webView.getUrl());
+                    } else if (result.contains("error:")) {
+                        Toast.makeText(this, "Falha ao iniciar a automação.", Toast.LENGTH_LONG).show();
+                    }
+                }), 220);
+    }
+
     private void injectIfAllowed(String url) {
         if (url == null || !isAllowedUri(Uri.parse(url)) || injectionScript.isBlank()) return;
-        webView.evaluateJavascript(injectionScript, value -> {
-            // O painel cuida da própria interface. Nenhum dado de login é lido pelo código nativo.
-        });
+        webView.evaluateJavascript(injectionScript, value -> { });
     }
 
     private boolean isAllowedUri(Uri uri) {
@@ -257,17 +311,28 @@ public final class MainActivity extends Activity {
 
     private void showFirstUseNotice() {
         new AlertDialog.Builder(this)
-                .setTitle("Como funciona")
-                .setMessage("Faça login somente nas páginas oficiais da BlaBlaCar. "
-                        + "O RotaAi localiza apenas quem ainda precisa ser avaliado, entra no perfil, "
-                        + "usa avaliações existentes como base e preenche o texto para sua conferência. "
-                        + "Nada é publicado até você aprovar cada pessoa e tocar em “Publicar aprovadas”.")
+                .setTitle("Fluxo rápido")
+                .setMessage("1. Faça login.\n2. Toque em Revisar pendentes.\n3. Confira o texto e use Aprovar/próxima.\n4. No final, toque em Publicar.\n\nO aplicativo não publica nada antes da sua aprovação.")
                 .setPositiveButton("Entendi", null)
                 .show();
     }
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    public final class AppBridge {
+        @JavascriptInterface
+        public void status(String message) {
+            runOnUiThread(() -> statusText.setText(message == null || message.isBlank()
+                    ? "RotaAi pronto." : message));
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        handler.postDelayed(() -> injectIfAllowed(webView == null ? null : webView.getUrl()), 350);
     }
 
     @Override
