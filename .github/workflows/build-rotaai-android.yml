@@ -1,0 +1,80 @@
+name: Build RotaAi Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/rotaai-android-avaliacoes
+    paths:
+      - "android-avaliador/**"
+      - ".github/workflows/build-rotaai-android.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "android-avaliador/**"
+      - ".github/workflows/build-rotaai-android.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Validate JavaScript assets
+        working-directory: android-avaliador
+        run: |
+          python - <<'PY'
+          import base64
+          import gzip
+          import pathlib
+          import subprocess
+
+          asset = pathlib.Path("app/src/main/assets/rotaai.js")
+          decoded = gzip.decompress(base64.b64decode(asset.read_text().strip())).decode("utf-8")
+          temporary = pathlib.Path("/tmp/rotaai.js")
+          temporary.write_text(decoded, encoding="utf-8")
+          subprocess.run(["node", "--check", str(temporary)], check=True)
+          subprocess.run(["node", "--check", "app/src/main/assets/generator.js"], check=True)
+          PY
+
+      - name: Build debug APK
+        working-directory: android-avaliador
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK archive
+        working-directory: android-avaliador
+        run: unzip -t app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotaai-avaliador-android
+          path: android-avaliador/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
