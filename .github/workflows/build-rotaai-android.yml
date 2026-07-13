@@ -46,7 +46,7 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Validate JavaScript assets
+      - name: Validate JavaScript and behavior
         working-directory: android-avaliador
         run: |
           python - <<'PY'
@@ -61,6 +61,8 @@ jobs:
           temporary.write_text(decoded, encoding="utf-8")
           subprocess.run(["node", "--check", str(temporary)], check=True)
           subprocess.run(["node", "--check", "app/src/main/assets/generator.js"], check=True)
+          subprocess.run(["node", "tests/pending-review-filter.test.js"], check=True)
+          subprocess.run(["node", "tests/generator-casual.test.js"], check=True)
           PY
 
       - name: Build debug APK
