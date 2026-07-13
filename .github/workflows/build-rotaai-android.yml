@@ -46,22 +46,36 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Decode and check JavaScript syntax
+      - name: Decode RotaAi automation
         working-directory: android-avaliador
         run: |
+          mkdir -p decoded
           python - <<'PY'
           import base64
           import gzip
           import pathlib
-          import subprocess
 
           asset = pathlib.Path("app/src/main/assets/rotaai.js")
           decoded = gzip.decompress(base64.b64decode(asset.read_text().strip())).decode("utf-8")
-          temporary = pathlib.Path("/tmp/rotaai.js")
-          temporary.write_text(decoded, encoding="utf-8")
-          subprocess.run(["node", "--check", str(temporary)], check=True)
-          subprocess.run(["node", "--check", "app/src/main/assets/generator.js"], check=True)
+          pathlib.Path("decoded/rotaai.js").write_text(decoded, encoding="utf-8")
           PY
+
+      - name: Check RotaAi syntax
+        working-directory: android-avaliador
+        run: node --check decoded/rotaai.js
+
+      - name: Check generator syntax
+        working-directory: android-avaliador
+        run: node --check app/src/main/assets/generator.js
+
+      - name: Upload decoded automation for diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotaai-decoded-diagnostic
+          path: android-avaliador/decoded/rotaai.js
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Test pending passenger filter
         working-directory: android-avaliador
