@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+def ciRunNumber = (System.getenv('GITHUB_RUN_NUMBER') ?: '1').toInteger()
+def stableKeystore = file("$rootDir/keystore/rotaai-internal-update.jks")
+def stableStorePassword = System.getenv('ROTAI_STORE_PASSWORD') ?: 'android'
+def stableKeyPassword = System.getenv('ROTAI_KEY_PASSWORD') ?: 'android'
+
 android {
     namespace 'br.com.rotaai.avaliador'
     compileSdk 35
@@ -10,22 +15,33 @@ android {
         applicationId 'br.com.rotaai.avaliador'
         minSdk 26
         targetSdk 35
-        versionCode 9
-        versionName '0.6.2'
+        versionCode 600000 + ciRunNumber
+        versionName '0.6.3'
     }
 
     buildFeatures {
         buildConfig true
     }
 
+    signingConfigs {
+        stableInternal {
+            storeFile stableKeystore
+            storePassword stableStorePassword
+            keyAlias 'androiddebugkey'
+            keyPassword stableKeyPassword
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.stableInternal
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
             applicationIdSuffix '.debug'
             versionNameSuffix '-debug'
+            signingConfig signingConfigs.stableInternal
         }
     }
 
