@@ -24,6 +24,8 @@ collect_profiles = r'''  const collectProfileLinks = (doc, baseUrl) => {
     const anchors = [...doc.querySelectorAll('a[href]')];
     anchors.forEach((anchor, domIndex) => {
       const href = absoluteUrl(anchor.getAttribute('href') || '', baseUrl);
+      let pathname = '';
+      try { pathname = new URL(href).pathname.toLowerCase(); } catch { return; }
       const score = profileHrefScore(href);
       const imageNames = [...anchor.querySelectorAll('img[alt]')]
         .map((img) => cleanName(img.getAttribute('alt') || '')).filter(isLikelyPersonName);
@@ -32,9 +34,10 @@ collect_profiles = r'''  const collectProfileLinks = (doc, baseUrl) => {
       const contextText = safeText(contextNode);
       const names = unique([...imageNames, textName].filter(isLikelyPersonName));
       const isSameSite = /^https:\/\/([a-z0-9-]+\.)?blablacar\.com(\.br)?\//i.test(href);
-      const isNavigation = /\/(rides\/offer|search|login|signup|carpool|bus|help|support)(?:[/?#]|$)/i.test(href);
+      const isOwnProfileMenu = /^\/dashboard\/profile(?:\/menu)?(?:\/|$)/i.test(pathname);
+      const isNavigation = /^\/(?:rides|ratings|search|login|signup|carpool|bus|help|support|dashboard)(?:\/|$)/i.test(pathname);
       const reviewScore = /avalia[cç][oõ]es|coment[aá]rios|opini[oõ]es|feedback|estrela|rating|reviews?/i.test(contextText) ? 4 : 0;
-      if (!score || !isSameSite || isNavigation) return;
+      if (!score || !isSameSite || isOwnProfileMenu || isNavigation) return;
       links.push({ href, names, score, reviewScore, domIndex, contextText: contextText.slice(0, 260) });
     });
     const deduped = new Map();
@@ -93,11 +96,9 @@ best_profile = r'''  const bestProfileForPassenger = (passenger, links) => {
       }))
     });
 
-    if (scored[0]?.nameScore >= 2) return scored[0].link.href;
-    const strong = scored.filter((item) => item.link.score >= 1 && item.link.reviewScore > 0);
-    if (strong.length === 1) return strong[0].link.href;
-    const explicit = scored.filter((item) => item.link.score >= 1);
-    return explicit.length === 1 ? explicit[0].link.href : '';
+    // Nunca usa um perfil genérico ou o menu da própria conta como fallback.
+    // O perfil precisa corresponder ao nome do passageiro.
+    return scored[0]?.nameScore >= 2 ? scored[0].link.href : '';
   };'''
 
 part2 = replace_section(
@@ -108,43 +109,178 @@ part2 = replace_section(
     "bestProfileForPassenger",
 )
 
+analysis_section = r'''  const passengerAnalysisLocks = globalThis.__rotaAiPassengerAnalysisLocks || new Map();
+  globalThis.__rotaAiPassengerAnalysisLocks = passengerAnalysisLocks;
+
+  const ratingParticipantIdFromUrl = (value = location.href) => {
+    try {
+      const match = new URL(value).pathname.match(/^\/ratings\/[^/]+\/([^/?#]+)/i);
+      return match?.[1] || '';
+    } catch { return ''; }
+  };
+
+  const derivedProfileUrls = (passenger) => {
+    const participantId = ratingParticipantIdFromUrl(passenger.reviewUrl || location.href);
+    if (!participantId) return [];
+    const origin = location.origin;
+    return unique([
+      `${origin}/member/profile/${participantId}`,
+      `${origin}/members/${participantId}`,
+      `${origin}/user/${participantId}`,
+      `${origin}/users/${participantId}`,
+      `${origin}/profile/${participantId}`
+    ]);
+  };
+
+  const profileDocumentMatchesPassenger = (doc, passenger, reviews) => {
+    if (!reviews.length) return false;
+    const page = normalize(safeText(doc.body || doc.documentElement));
+    const fullName = normalize(passenger.name);
+    const firstName = fullName.split(' ')[0];
+    return Boolean(fullName && (page.includes(fullName) || (firstName && page.includes(firstName))));
+  };
+
+  const analyzePassenger = async (passenger, currentDoc = null) => {
+    const lockKey = passenger.key || normalize(passenger.name);
+    if (passengerAnalysisLocks.has(lockKey)) {
+      window.RotaAiDebug?.log?.('profile', 'analysis_join_existing', { passenger: passenger.name });
+      return passengerAnalysisLocks.get(lockKey);
+    }
+
+    const task = (async () => {
+      passenger.status = 'analisando'; passenger.reason = ''; render();
+      try {
+        let profileDoc = currentDoc;
+        let reviews = profileDoc ? extractReviews(profileDoc) : [];
+
+        if (!profileDocumentMatchesPassenger(profileDoc || document, passenger, reviews)) {
+          profileDoc = null;
+          reviews = [];
+        }
+
+        const candidates = unique([
+          passenger.profileUrl || '',
+          ...derivedProfileUrls(passenger)
+        ]).filter(Boolean).filter((url) => !/\/dashboard\/profile(?:\/menu)?(?:[/?#]|$)/i.test(url));
+
+        for (const candidateUrl of candidates) {
+          if (profileDoc) break;
+          window.RotaAiDebug?.log?.('profile', 'profile_probe_start', {
+            passenger: passenger.name,
+            url: (() => { try { const u = new URL(candidateUrl); return `${u.origin}${u.pathname}`; } catch { return ''; } })()
+          });
+          try {
+            const candidateDoc = await fetchDocument(candidateUrl);
+            const candidateReviews = extractReviews(candidateDoc);
+            const matches = profileDocumentMatchesPassenger(candidateDoc, passenger, candidateReviews);
+            window.RotaAiDebug?.log?.('profile', 'profile_probe_result', {
+              passenger: passenger.name,
+              matches,
+              reviewCount: candidateReviews.length,
+              url: (() => { try { const u = new URL(candidateUrl); return `${u.origin}${u.pathname}`; } catch { return ''; } })()
+            });
+            if (matches) {
+              passenger.profileUrl = candidateUrl;
+              profileDoc = candidateDoc;
+              reviews = candidateReviews;
+            }
+          } catch (error) {
+            window.RotaAiDebug?.log?.('profile', 'profile_probe_failed', {
+              passenger: passenger.name,
+              error: error?.message || String(error),
+              url: (() => { try { const u = new URL(candidateUrl); return `${u.origin}${u.pathname}`; } catch { return ''; } })()
+            }, 'warn');
+          }
+        }
+
+        if (!profileDoc) throw new Error('Perfil do passageiro não identificado com segurança.');
+        passenger.reviews = reviews;
+        const generated = window.RotaAiGenerator.generateEvaluation({ name: passenger.name, reviews });
+        passenger.suggestion = generated.text;
+        passenger.traits = generated.traits;
+        passenger.reason = generated.reason;
+        passenger.status = generated.ok ? 'pronto' : 'sem_base';
+        if (!generated.ok) passenger.approved = false;
+        return generated.ok;
+      } catch (error) {
+        passenger.status = 'erro'; passenger.reason = error?.message || 'Falha ao ler o perfil.';
+        passenger.approved = false;
+        return false;
+      }
+    })();
+
+    passengerAnalysisLocks.set(lockKey, task);
+    try { return await task; }
+    finally { passengerAnalysisLocks.delete(lockKey); }
+  };'''
+
+part2 = replace_section(
+    part2,
+    "  const analyzePassenger = async (passenger, currentDoc = null) => {",
+    "  const preparePassengerFromCurrentPage =",
+    analysis_section,
+    "analyzePassenger",
+)
+
+prepare_current = r'''  const preparePassengerFromCurrentPage = async (passenger) => {
+    if (passenger.suggestion?.trim()) return true;
+    if (!passenger.profileUrl) {
+      passenger.profileUrl = bestProfileForPassenger(passenger, collectProfileLinks(document, location.href));
+    }
+    return analyzePassenger(passenger, document);
+  };'''
+
+part2 = replace_section(
+    part2,
+    "  const preparePassengerFromCurrentPage = async (passenger) => {",
+    "  const generateAll =",
+    prepare_current,
+    "preparePassengerFromCurrentPage",
+)
+
 first_pending = r'''  const pendingActionCandidates = (passengerName = '') => {
     const normalizedName = normalize(passengerName);
-    const firstName = normalizedName.split(' ')[0];
-    return [...document.querySelectorAll('a[href], button, [role="button"]')]
+    const specificPassenger = Boolean(normalizedName);
+    return [...document.querySelectorAll('a[href]')]
       .filter((element) => visible(element) && !element.closest(`#${ROOT_ID}`))
       .map((element) => {
         const textRaw = safeText(element);
         const text = normalize(`${textRaw} ${element.getAttribute('aria-label') || ''}`);
+        const href = absoluteUrl(element.getAttribute('href') || '', location.href);
+        let pathname = '';
+        try { pathname = new URL(href).pathname; } catch { /* URL inválida */ }
         const contextNode = element.closest('article, li, section, [data-testid], div') || element.parentElement;
         const contextRaw = safeText(contextNode);
-        const context = normalize(contextRaw);
-        const detectedNames = pendingReviewNamesFromText(`${textRaw} ${contextRaw}`);
-        const exactNamed = Boolean(normalizedName && detectedNames.some((name) => normalize(name) === normalizedName));
-        const nameMention = Boolean(normalizedName && (text.includes(normalizedName) || context.includes(normalizedName)
-          || (firstName && (text.includes(firstName) || context.includes(firstName)))));
-        const explicitPrompt = /avalie sua experiencia(?: de viagem)? com/.test(`${text} ${context}`);
-        const reviewContext = explicitPrompt || /faca uma avaliacao|fazer avaliacao|avaliar passageir|deixar avaliacao/.test(`${text} ${context}`);
+        const ownDetectedNames = pendingReviewNamesFromText(textRaw);
+        const exactNamed = Boolean(specificPassenger
+          && ownDetectedNames.some((name) => normalize(name) === normalizedName));
+        const ownReviewPrompt = hasPendingReviewLabel(textRaw);
+        const tripHasPending = hasPendingReviewLabel(contextRaw);
+        const isRatingLink = /^\/ratings\/[^/]+\/[^/?#]+(?:\/|$)/i.test(pathname);
+        const isTripSummaryLink = /^\/rides\/offer\/?$/i.test(pathname);
+        const blocked = /\/rides\/offer\/edit(?:\/|$)|\/dashboard\/profile(?:\/menu)?(?:\/|$)/i.test(pathname);
+        const valid = !blocked && (specificPassenger
+          ? (isRatingLink && exactNamed && ownReviewPrompt)
+          : (isTripSummaryLink && tripHasPending));
         const rect = element.getBoundingClientRect();
-        let score = reviewContext ? 30 : -100;
-        if (explicitPrompt) score += 35;
-        if (exactNamed) score += 120;
-        else if (nameMention) score += 35;
-        if (detectedNames.length === 1) score += 12;
-        if (detectedNames.length > 1) score -= 70;
-        if (/excluir|cancelar|denunciar|editar viagem/.test(text)) score -= 120;
+        let score = valid ? 1000 : -1000;
+        if (specificPassenger && exactNamed) score += 500;
+        if (isRatingLink) score += 200;
+        if (!specificPassenger && isTripSummaryLink) score += 100;
         score -= Math.min(25, text.length / 30);
         return {
           el: element,
           score,
           exactNamed,
-          reviewContext,
+          reviewContext: specificPassenger ? ownReviewPrompt : tripHasPending,
           top: rect.top,
           text: textRaw,
-          detectedNames
+          detectedNames: ownDetectedNames,
+          href,
+          valid
         };
       })
-      .filter((item) => item.score > 0)
+      .filter((item) => item.valid)
       .sort((left, right) => right.score - left.score || right.top - left.top || left.text.length - right.text.length);
   };
 
@@ -152,17 +288,17 @@ first_pending = r'''  const pendingActionCandidates = (passengerName = '') => {
     const candidates = pendingActionCandidates('');
     const chosen = candidates[0] || null;
     window.RotaAiDebug?.logCandidates?.('first_pending_action', candidates, chosen, {
-      rule: 'card-below-v1: em empate escolhe o card visível mais abaixo e com texto mais específico'
+      rule: 'trip-summary-v2: somente /rides/offer cujo próprio card indica avaliação pendente'
     });
     return chosen?.el || null;
   };'''
 
 part2 = replace_section(
     part2,
-    "  const findFirstPendingAction = () => {",
+    "  const pendingActionCandidates = (passengerName = '') => {",
     "  const startSmartReview =",
     first_pending,
-    "findFirstPendingAction",
+    "pendingActionCandidates/findFirstPendingAction",
 )
 
 part2_path.write_text(part2, encoding="utf-8")
@@ -175,7 +311,7 @@ passenger_action = r'''  const findPassengerAction = (passenger) => {
     const chosen = candidates[0] || null;
     window.RotaAiDebug?.logCandidates?.('passenger_action', candidates, chosen, {
       passenger: passenger.name,
-      rule: 'card-below-v1: exige contexto de avaliação, prioriza o nome exato e o card individual mais abaixo'
+      rule: 'exact-rating-v2: somente link /ratings/ com convite individual e nome exato do passageiro'
     });
     return chosen?.el || null;
   };'''
