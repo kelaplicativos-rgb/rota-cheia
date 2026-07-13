@@ -62,6 +62,12 @@ public final class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.WHITE);
+        getWindow().setStatusBarColor(Color.rgb(0, 106, 106));
+        getWindow().setNavigationBarColor(Color.WHITE);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            view.setPadding(0, insets.getSystemWindowInsetTop(), 0, insets.getSystemWindowInsetBottom());
+            return insets;
+        });
 
         LinearLayout toolbar = new LinearLayout(this);
         toolbar.setOrientation(LinearLayout.HORIZONTAL);
@@ -137,8 +143,10 @@ public final class MainActivity extends Activity {
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setMediaPlaybackRequiresUserGesture(true);
-        settings.setUserAgentString(settings.getUserAgentString() + " RotaAiAvaliador/0.2.0");
-        if (android.os.Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
+        settings.setUserAgentString(settings.getUserAgentString() + " RotaAiAvaliador/0.3.0");
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            settings.setSafeBrowsingEnabled(true);
+        }
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -199,7 +207,9 @@ public final class MainActivity extends Activity {
 
     private void injectIfAllowed(String url) {
         if (url == null || !isAllowedUri(Uri.parse(url)) || injectionScript.isBlank()) return;
-        webView.evaluateJavascript(injectionScript, value -> { });
+        webView.evaluateJavascript(injectionScript, value -> {
+            // O painel cuida da própria interface. Nenhum dado de login é lido pelo código nativo.
+        });
     }
 
     private boolean isAllowedUri(Uri uri) {
@@ -245,8 +255,9 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("Como funciona")
                 .setMessage("Faça login somente nas páginas oficiais da BlaBlaCar. "
-                        + "O RotaAi prepara as avaliações localmente. A publicação em lote só começa "
-                        + "depois que você revisar, aprovar e tocar em ‘Publicar todas’.")
+                        + "O RotaAi localiza apenas quem ainda precisa ser avaliado, entra no perfil, "
+                        + "usa avaliações existentes como base e preenche o texto para sua conferência. "
+                        + "Nada é publicado até você aprovar cada pessoa e tocar em “Publicar aprovadas”.")
                 .setPositiveButton("Entendi", null)
                 .show();
     }
