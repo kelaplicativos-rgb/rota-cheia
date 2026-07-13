@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -32,6 +33,22 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Restore or create stable signing key
+        working-directory: android-avaliador
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x tools/ensure_stable_signing.sh
+          tools/ensure_stable_signing.sh
+
+      - name: Preserve stable signing key
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotaai-signing-key
+          path: android-avaliador/keystore/rotaai-internal-update.jks
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Configure Android SDK
         uses: android-actions/setup-android@v3
@@ -63,7 +80,7 @@ jobs:
           python tools/patch_dynamic_retry.py
           python tools/patch_rating_flow.py
           python tools/patch_native_version.py
-          sed -i "s/'0.4.0'/'0.6.2'/g; s/'0.5.0'/'0.6.2'/g; s/'0.6.1'/'0.6.2'/g" app/src/main/assets/rotaai-part*.js
+          sed -i "s/'0.4.0'/'0.6.3'/g; s/'0.5.0'/'0.6.3'/g; s/'0.6.1'/'0.6.3'/g; s/'0.6.2'/'0.6.3'/g" app/src/main/assets/rotaai-part*.js
 
       - name: Assemble and check RotaAi automation
         working-directory: android-avaliador
@@ -83,9 +100,11 @@ jobs:
           grep -q '/user/show/${participantId}/reviews' app/src/main/assets/rotaai-part2.js
           grep -q "Aguardando o resumo carregar" app/src/main/assets/rotaai-part2.js
           grep -q "stopAll" app/src/main/assets/rotaai-part5-debug.js
-          grep -q "0.6.2" app/src/main/assets/rotaai-part5-debug.js
+          grep -q "0.6.3" app/src/main/assets/rotaai-part5-debug.js
           grep -q "BuildConfig.VERSION_NAME" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
           grep -q "Exportar log" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
+          grep -q "signingConfig signingConfigs.stableInternal" app/build.gradle
+          grep -q "versionCode 600000 + ciRunNumber" app/build.gradle
 
       - name: Test pending passenger filter
         working-directory: android-avaliador
@@ -103,13 +122,16 @@ jobs:
         working-directory: android-avaliador
         run: node tests/generator-casual.test.js
 
-      - name: Build debug APK
+      - name: Build update-compatible APK
         working-directory: android-avaliador
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Verify APK archive
+      - name: Verify APK archive and signature
         working-directory: android-avaliador
-        run: unzip -t app/build/outputs/apk/debug/app-debug.apk
+        run: |
+          unzip -t app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee decoded/apk-signing.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" decoded/apk-signing.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
