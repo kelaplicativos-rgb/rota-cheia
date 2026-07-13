@@ -46,7 +46,11 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        injectionScript = loadAsset("generator.js") + "\n" + loadAsset("rotaai.js");
+        injectionScript = loadAsset("generator.js") + "\n"
+                + loadAsset("rotaai-part1.js") + "\n"
+                + loadAsset("rotaai-part2.js") + "\n"
+                + loadAsset("rotaai-part3.js") + "\n"
+                + loadAsset("rotaai-part4.js");
         buildUi();
         configureWebView();
 
