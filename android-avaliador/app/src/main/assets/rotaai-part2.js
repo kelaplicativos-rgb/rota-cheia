@@ -12,8 +12,6 @@
       const names = unique([...imageNames, textName].filter(isLikelyPersonName));
       const isSameSite = /^https:\/\/([a-z0-9-]+\.)?blablacar\.com(\.br)?\//i.test(href);
       const isNavigation = /\/(rides\/offer|search|login|signup|carpool|bus|help|support)(?:[/?#]|$)/i.test(href);
-      // Para evitar abrir o link de avaliação ou outro link com o nome da pessoa,
-      // só considera URLs que tenham formato explícito de perfil.
       if (!score || !isSameSite || isNavigation) continue;
       links.push({ href, names, score });
     }
@@ -51,9 +49,7 @@
     }
     const unmatched = tripPassengers.filter((p) => !result.has(p.key));
     const strong = remaining.filter((link) => link.score >= 1);
-    if (unmatched.length === 1 && strong.length === 1) {
-      result.set(unmatched[0].key, strong[0].href);
-    }
+    if (unmatched.length === 1 && strong.length === 1) result.set(unmatched[0].key, strong[0].href);
     return result;
   };
 
@@ -135,100 +131,77 @@
   };
 
   const scanTrips = async () => {
-    const cards = getTripCards(document);
-    const pendingCards = cards.filter((article) => hasPendingReviewLabel(safeText(article)));
+    const directNames = pendingReviewNamesFromText(document.body?.innerText || '');
     const trips = extractTrips(document);
     state.trips = trips;
     state.passengers = buildPassengerQueue(trips);
-    state.unresolvedTrips = Math.max(0, pendingCards.length - trips.length);
+    const genericPending = getTripCards(document).filter((root) => hasPendingReviewLabel(safeText(root))).length;
+    state.unresolvedTrips = state.passengers.length ? 0 : genericPending;
     if (state.passengers.length) {
-      state.status = `${state.passengers.length} passageiro(s) ainda sem avaliação em ${trips.length} viagem(ns).`;
-      if (state.unresolvedTrips) {
-        state.status += ` ${state.unresolvedTrips} viagem(ns) não exibiram o nome de quem falta avaliar; abra cada uma e escaneie novamente.`;
-      }
+      state.status = `${state.passengers.length} passageiro(s) aguardando sua avaliação.`;
+    } else if (directNames.length) {
+      state.status = `${directNames.length} convite(s) detectado(s), mas o link ainda não ficou disponível.`;
     } else if (state.unresolvedTrips) {
-      state.status = `${state.unresolvedTrips} viagem(ns) indicam avaliação pendente, mas não mostram o nome. Abra a viagem e escaneie novamente.`;
+      state.status = 'Encontrei uma viagem pendente. Abrindo o resumo para identificar os passageiros...';
     } else {
-      state.status = 'Nenhum passageiro sem avaliação foi encontrado nesta página.';
+      state.status = 'Nenhuma avaliação pendente apareceu nesta tela.';
     }
+    notifyNative(state.status);
     saveState(); render();
   };
 
   const discoverProfiles = async () => {
-    if (!state.passengers.length) return setStatus('Escaneie primeiro a página de viagens.');
+    if (!state.passengers.length) return setStatus('Nenhum passageiro pendente foi encontrado.');
     state.busy = true; render();
     const groups = new Map();
     for (const passenger of state.passengers) {
       if (!groups.has(passenger.tripId)) groups.set(passenger.tripId, []);
       groups.get(passenger.tripId).push(passenger);
     }
-
     let processed = 0;
     for (const trip of state.trips) {
       const passengers = groups.get(trip.id) || [];
       if (!passengers.length) continue;
-      state.status = `Buscando perfis: ${processed + 1} de ${state.trips.length}`; render();
-
-      // Primeiro usa o convite individual de cada passageiro. Esse é o caminho
-      // mais seguro para não associar a avaliação ao perfil errado.
+      state.status = `Localizando perfis (${processed + 1}/${state.trips.length})...`; notifyNative(state.status); render();
       for (const passenger of passengers) {
         if (passenger.profileUrl) continue;
         const sourceUrl = passenger.reviewUrl || '';
         if (!sourceUrl) continue;
         try {
-          if (profileHrefScore(sourceUrl) >= 2) {
-            passenger.profileUrl = sourceUrl;
-          } else {
+          if (profileHrefScore(sourceUrl) >= 2) passenger.profileUrl = sourceUrl;
+          else {
             const sourceDoc = await fetchDocument(sourceUrl);
-            passenger.profileUrl = bestProfileForPassenger(
-              passenger,
-              collectProfileLinks(sourceDoc, sourceUrl)
-            );
+            passenger.profileUrl = bestProfileForPassenger(passenger, collectProfileLinks(sourceDoc, sourceUrl));
           }
         } catch (error) {
           console.warn('RotaAi: convite individual não revelou o perfil.', passenger.name, error);
         }
-        await sleep(250);
+        await sleep(180);
       }
-
-      // Depois usa a página geral da viagem somente para quem ainda ficou sem
-      // perfil e exige correspondência pelo nome (ou caso único inequívoco).
       const unmatched = passengers.filter((passenger) => !passenger.profileUrl);
-      if (unmatched.length && trip.offerUrl) {
+      if (unmatched.length && trip.offerUrl && trip.offerUrl !== location.href) {
         try {
           const tripDoc = await fetchDocument(trip.offerUrl);
-          const links = collectProfileLinks(tripDoc, trip.offerUrl);
-          const matched = matchProfilesToPassengers(unmatched, links);
-          for (const passenger of unmatched) {
-            passenger.profileUrl = matched.get(passenger.key) || '';
-          }
+          const matched = matchProfilesToPassengers(unmatched, collectProfileLinks(tripDoc, trip.offerUrl));
+          for (const passenger of unmatched) passenger.profileUrl = matched.get(passenger.key) || '';
         } catch (error) {
-          console.warn('RotaAi: página geral da viagem não revelou os perfis.', error);
-        }
-      }
-
-      for (const passenger of passengers) {
-        if (!passenger.profileUrl && passenger.status !== 'pronto') {
-          passenger.status = 'sem_perfil';
-          passenger.reason = 'Perfil não identificado com segurança nessa viagem.';
+          console.warn('RotaAi: página da viagem não revelou os perfis.', error);
         }
       }
       processed += 1; saveState(); await sleep(REQUEST_DELAY_MS);
     }
-
-    const found = state.passengers.filter((p) => p.profileUrl).length;
     state.busy = false;
-    state.status = `${found} de ${state.passengers.length} perfis identificados com segurança.`;
     saveState(); render();
   };
 
-  const analyzePassenger = async (passenger) => {
-    if (!passenger.profileUrl) {
-      passenger.status = 'sem_perfil'; passenger.reason = 'O link do perfil não foi encontrado.'; return;
-    }
+  const analyzePassenger = async (passenger, currentDoc = null) => {
     passenger.status = 'analisando'; passenger.reason = ''; render();
     try {
-      const profileDoc = await fetchDocument(passenger.profileUrl);
+      let profileDoc = currentDoc;
+      if (!profileDoc) {
+        if (!passenger.profileUrl) throw new Error('Perfil ainda não identificado.');
+        profileDoc = await fetchDocument(passenger.profileUrl);
+      }
       passenger.reviews = extractReviews(profileDoc);
       const generated = window.RotaAiGenerator.generateEvaluation({ name: passenger.name, reviews: passenger.reviews });
       passenger.suggestion = generated.text;
@@ -236,10 +209,31 @@
       passenger.reason = generated.reason;
       passenger.status = generated.ok ? 'pronto' : 'sem_base';
       if (!generated.ok) passenger.approved = false;
+      return generated.ok;
     } catch (error) {
       passenger.status = 'erro'; passenger.reason = error?.message || 'Falha ao ler o perfil.';
       passenger.approved = false;
+      return false;
     }
+  };
+
+  const preparePassengerFromCurrentPage = async (passenger) => {
+    if (passenger.suggestion?.trim()) return true;
+    if (!passenger.profileUrl) {
+      passenger.profileUrl = bestProfileForPassenger(passenger, collectProfileLinks(document, location.href));
+    }
+    if (passenger.profileUrl) return analyzePassenger(passenger);
+    const pageReviews = extractReviews(document);
+    if (pageReviews.length) {
+      passenger.reviews = pageReviews;
+      const generated = window.RotaAiGenerator.generateEvaluation({ name: passenger.name, reviews: pageReviews });
+      passenger.suggestion = generated.text;
+      passenger.traits = generated.traits;
+      passenger.reason = generated.reason;
+      passenger.status = generated.ok ? 'pronto' : 'sem_base';
+      return generated.ok;
+    }
+    return false;
   };
 
   const generateAll = async () => {
@@ -248,13 +242,13 @@
     const pending = state.passengers.filter((p) => p.profileUrl && !p.published);
     let done = 0;
     for (const passenger of pending) {
-      state.status = `Gerando avaliação de ${passenger.name} (${done + 1}/${pending.length})`; render();
+      state.status = `Gerando avaliação de ${passenger.name} (${done + 1}/${pending.length})`; notifyNative(state.status); render();
       await analyzePassenger(passenger); done += 1; saveState(); await sleep(REQUEST_DELAY_MS);
     }
     state.busy = false;
     const ready = state.passengers.filter((p) => p.status === 'pronto' && p.suggestion).length;
-    state.status = `${ready} avaliações prontas. Revise o texto e as estrelas.`;
-    saveState(); render();
+    state.status = `${ready} avaliações prontas.`;
+    notifyNative(state.status); saveState(); render();
   };
 
   const prepareAll = async () => {
@@ -263,9 +257,51 @@
     if (!state.passengers.length) return;
     await discoverProfiles();
     await generateAll();
-    const ready = state.passengers.filter((p) => p.status === 'pronto' && p.suggestion?.trim()).length;
-    state.status = `${ready} avaliação(ões) preparada(s). Agora revise uma por uma.`;
-    saveState(); render();
+  };
+
+  const findFirstPendingAction = () => {
+    const elements = [...document.querySelectorAll('a[href], button, [role="button"]')].filter((el) => visible(el));
+    return elements.find((el) => hasPendingReviewLabel(safeText(el))) || null;
+  };
+
+  const startSmartReview = async () => {
+    if (state.busy || state.publish.active || state.review.active) return;
+    state.panelOpen = true;
+    state.busy = true;
+    setStatus('Procurando quem ainda não foi avaliado...');
+    await scanTrips();
+    state.busy = false;
+
+    if (!state.passengers.length) {
+      const pendingAction = findFirstPendingAction();
+      if (pendingAction) {
+        state.review.autoStart = true;
+        setStatus('Abrindo o resumo da viagem...');
+        pendingAction.click();
+        return;
+      }
+      if (!/\/rides(?:[/?#]|$)/i.test(location.pathname)) {
+        state.review.autoStart = true;
+        setStatus('Abrindo suas viagens...');
+        location.href = RIDES_URL;
+        return;
+      }
+      state.review.autoStart = false;
+      return setStatus('Nenhum passageiro aguardando avaliação foi encontrado nesta tela.');
+    }
+
+    const queue = state.passengers.filter((p) => !p.published).map((p) => p.key);
+    state.review = {
+      ...initialState().review,
+      active: true,
+      autoStart: false,
+      queue,
+      currentKey: queue[0],
+      stage: 'starting'
+    };
+    state.status = `Abrindo a primeira de ${queue.length} avaliação(ões).`;
+    notifyNative(state.status); saveState(); render();
+    processReviewFlow(true);
   };
 
   const currentReviewPassenger = () => {
@@ -282,4 +318,3 @@
     const match = `${safeText(selected)} ${selected?.getAttribute?.('aria-label') || ''}`.match(/([1-5])/);
     return match ? Number(match[1]) : 0;
   };
-
