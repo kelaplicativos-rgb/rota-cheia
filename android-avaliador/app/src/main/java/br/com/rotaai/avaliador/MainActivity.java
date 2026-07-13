@@ -25,11 +25,14 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.util.Base64;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
+import java.io.ByteArrayInputStream;
+import java.util.zip.GZIPInputStream;
 
 public final class MainActivity extends Activity {
     private static final String HOME_URL = "https://www.blablacar.com.br/rides";
@@ -223,8 +226,17 @@ public final class MainActivity extends Activity {
             byte[] buffer = new byte[8192];
             int read;
             while ((read = input.read(buffer)) >= 0) output.write(buffer, 0, read);
-            return output.toString(java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IOException error) {
+            String raw = output.toString(java.nio.charset.StandardCharsets.UTF_8).trim();
+            if (raw.startsWith("H4sI")) {
+                byte[] compressed = Base64.decode(raw, Base64.DEFAULT);
+                try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(compressed));
+                     ByteArrayOutputStream decoded = new ByteArrayOutputStream()) {
+                    while ((read = gzip.read(buffer)) >= 0) decoded.write(buffer, 0, read);
+                    return decoded.toString(java.nio.charset.StandardCharsets.UTF_8);
+                }
+            }
+            return raw;
+        } catch (IOException | IllegalArgumentException error) {
             return "console.error('RotaAi: falha ao carregar " + name.replace("'", "") + "');";
         }
     }
