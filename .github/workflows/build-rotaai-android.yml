@@ -46,7 +46,7 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Apply automation safety patch
+      - name: Apply automation safety patches
         working-directory: android-avaliador
         run: |
           python - <<'PY'
@@ -60,6 +60,8 @@ jobs:
           path.write_text(source, encoding='utf-8')
           PY
           python tools/patch_automation.py
+          python tools/patch_dynamic_retry.py
+          sed -i "s/'0.4.0'/'0.6.1'/g; s/'0.5.0'/'0.6.1'/g" app/src/main/assets/rotaai-part*.js
 
       - name: Assemble and check RotaAi automation
         working-directory: android-avaliador
@@ -74,7 +76,9 @@ jobs:
           node --check app/src/main/assets/generator.js
           grep -q "trip-summary-v2" app/src/main/assets/rotaai-part2.js
           grep -q "exact-rating-v2" app/src/main/assets/rotaai-part4.js
+          grep -q "Aguardando o resumo carregar" app/src/main/assets/rotaai-part2.js
           grep -q "stopAll" app/src/main/assets/rotaai-part5-debug.js
+          grep -q "0.6.1" app/src/main/assets/rotaai-part5-debug.js
           grep -q "Exportar log" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
 
       - name: Test pending passenger filter
