@@ -79,8 +79,9 @@ jobs:
           python tools/patch_automation.py
           python tools/patch_dynamic_retry.py
           python tools/patch_rating_flow.py
+          python tools/patch_no_reviews.py
           python tools/patch_native_version.py
-          sed -i "s/'0.4.0'/'0.6.3'/g; s/'0.5.0'/'0.6.3'/g; s/'0.6.1'/'0.6.3'/g; s/'0.6.2'/'0.6.3'/g" app/src/main/assets/rotaai-part*.js
+          sed -i "s/'0.4.0'/'0.6.4'/g; s/'0.5.0'/'0.6.4'/g; s/'0.6.1'/'0.6.4'/g; s/'0.6.2'/'0.6.4'/g; s/'0.6.3'/'0.6.4'/g" app/src/main/assets/rotaai-part*.js
 
       - name: Assemble and check RotaAi automation
         working-directory: android-avaliador
@@ -98,9 +99,11 @@ jobs:
           grep -q "same_rating_flow_kept" app/src/main/assets/rotaai-part4.js
           grep -q "rating_flow_wait" app/src/main/assets/rotaai-part3.js
           grep -q '/user/show/${participantId}/reviews' app/src/main/assets/rotaai-part2.js
+          grep -q "profile_without_reviews_allowed" app/src/main/assets/rotaai-part2.js
+          grep -q "profile_without_reviews" app/src/main/assets/generator.js
           grep -q "Aguardando o resumo carregar" app/src/main/assets/rotaai-part2.js
           grep -q "stopAll" app/src/main/assets/rotaai-part5-debug.js
-          grep -q "0.6.3" app/src/main/assets/rotaai-part5-debug.js
+          grep -q "0.6.4" app/src/main/assets/rotaai-part5-debug.js
           grep -q "BuildConfig.VERSION_NAME" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
           grep -q "Exportar log" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
           grep -q "signingConfig signingConfigs.stableInternal" app/build.gradle
@@ -117,6 +120,10 @@ jobs:
       - name: Test rating flow loop protection
         working-directory: android-avaliador
         run: node tests/rating-flow-loop.test.js
+
+      - name: Test passenger without reviews
+        working-directory: android-avaliador
+        run: node tests/profile-without-reviews.test.js
 
       - name: Test casual review generator
         working-directory: android-avaliador
