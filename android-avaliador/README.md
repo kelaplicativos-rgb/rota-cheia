@@ -2,17 +2,22 @@
 
 Aplicativo Android com navegador interno para preparar, revisar e publicar avaliações de passageiros na BlaBlaCar.
 
-## Fluxo correto
+## Fluxo rápido
 
 1. Fazer login na página oficial da BlaBlaCar.
-2. Abrir **Minhas viagens**.
-3. Tocar em **Preparar pendentes**.
-4. O app inclui somente os blocos individuais com **“Faça uma avaliação! Avalie sua experiência de viagem com [nome]”**.
-5. Para cada pessoa pendente, tenta abrir o convite individual, identificar o perfil correto e ler avaliações já existentes.
-6. Gera uma avaliação curta e casual, preservando apenas as qualidades encontradas na base.
-7. Tocar em **Revisar uma por uma**. O app abre o formulário de cada pessoa e preenche o texto sem publicar.
-8. Conferir ou editar o texto e a nota; depois tocar em **Aprovar e próxima**.
-9. Ao terminar, tocar em **Publicar aprovadas** para enviar uma por vez.
+2. Tocar no botão nativo **Revisar pendentes**.
+3. O app abre a área de viagens ou o resumo necessário, identifica somente os convites individuais ainda pendentes e abre a primeira pessoa.
+4. Dentro do formulário real, identifica o perfil correspondente, lê avaliações existentes e gera um texto curto e casual sem inventar qualidades.
+5. O campo é preenchido automaticamente. O usuário confere ou edita e toca em **Aprovar / próxima**.
+6. Depois da última pessoa, tocar em **Publicar**. Somente as avaliações aprovadas são enviadas.
+
+## Controles nativos
+
+- **Revisar pendentes**: inicia todo o processo com um toque.
+- **Aprovar / próxima**: guarda o texto e a nota conferidos e avança.
+- **Publicar**: envia em sequência apenas o que foi aprovado.
+
+O status da automação aparece acima do navegador, sem depender do painel sobreposto ao site.
 
 ## Travas
 
@@ -25,7 +30,7 @@ Aplicativo Android com navegador interno para preparar, revisar e publicar avali
 - Só marca como publicada depois de detectar a confirmação da página.
 - Interrompe diante de captcha, erro ou página inesperada.
 - Não tenta contornar proteção da plataforma.
-- Não usa ponte JavaScript nativa para expor senha ou cookies.
+- A ponte nativa recebe somente mensagens de status; não expõe senha, cookies ou conteúdo de login.
 - Não solicita contatos, localização ou arquivos do aparelho.
 
 ## Compilar
