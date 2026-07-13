@@ -48,7 +48,18 @@ jobs:
 
       - name: Apply automation safety patch
         working-directory: android-avaliador
-        run: python tools/patch_automation.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/patch_automation.py')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(
+              '    "  const pendingActionCandidates = (passengerName = \'\') => {",\n    "  const startSmartReview =",',
+              '    "  const findFirstPendingAction = () => {",\n    "  const startSmartReview =",'
+          )
+          path.write_text(source, encoding='utf-8')
+          PY
+          python tools/patch_automation.py
 
       - name: Assemble and check RotaAi automation
         working-directory: android-avaliador
