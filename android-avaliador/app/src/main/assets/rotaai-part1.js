@@ -1,15 +1,16 @@
 (() => {
   'use strict';
 
-  if (window.RotaAiAndroid?.version === '0.3.0') {
+  if (window.RotaAiAndroid?.version === '0.4.0') {
     window.RotaAiAndroid.resume?.();
     return;
   }
 
   const ROOT_ID = 'rotaai-android-panel';
   const STYLE_ID = 'rotaai-android-style';
-  const STORAGE_KEY = 'rotaaiAndroidReviewStateV4';
-  const REQUEST_DELAY_MS = 700;
+  const STORAGE_KEY = 'rotaaiAndroidReviewStateV5';
+  const RIDES_URL = 'https://www.blablacar.com.br/rides';
+  const REQUEST_DELAY_MS = 500;
   const MAX_REVIEW_TEXTS = 30;
   const PROFILE_PATH_MARKERS = ['/member/profile', '/members/', '/user/', '/users/', '/profile/'];
   const SUCCESS_PATTERNS = [
@@ -32,11 +33,12 @@
     passengers: [],
     unresolvedTrips: 0,
     busy: false,
-    status: 'Entre na sua conta e abra “Suas viagens”.',
-    panelOpen: true,
+    status: 'Entre na conta e toque em “Revisar pendentes”.',
+    panelOpen: false,
     review: {
       active: false,
       paused: false,
+      autoStart: false,
       queue: [],
       index: 0,
       stage: 'idle',
@@ -61,6 +63,7 @@
 
   let state = initialState();
   let automationTimer = null;
+  let mutationTimer = null;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const normalize = window.RotaAiGenerator?.normalize ?? ((value = '') => value.toLowerCase().trim());
@@ -90,7 +93,6 @@
   const escapeHtml = (value = '') => value.toString()
     .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-
 
   const pendingReviewNamesFromText = (value = '') => {
     const text = value.toString().replace(/\s+/g, ' ').trim();
@@ -132,6 +134,10 @@
     return;
   }
 
+  const notifyNative = (message) => {
+    try { window.RotaAiNative?.status?.(message); } catch { /* interface opcional */ }
+  };
+
   const saveState = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, savedAt: new Date().toISOString() }));
@@ -161,6 +167,7 @@
 
   const setStatus = (message) => {
     state.status = message;
+    notifyNative(message);
     saveState();
     render();
   };
@@ -192,7 +199,7 @@
     return absoluteUrl(anchor?.getAttribute?.('href') || '', baseUrl);
   };
 
-  const extractPendingReviewPassengers = (article) => {
+  const extractPendingReviewPassengers = (root) => {
     const found = new Map();
     const add = (name, reviewUrl = '', source = 'named-prompt') => {
       const cleaned = cleanName(name);
@@ -204,48 +211,42 @@
       }
     };
 
-    // Lê primeiro os menores blocos clicáveis. Assim, o link de Raquel não é
-    // confundido com o link geral da viagem que também contém Sofia e Erick.
-    const nodes = [...article.querySelectorAll('a[href], button, [role="button"], li, section, div, p, span')]
-      .filter((node) => hasPendingReviewLabel(safeText(node)))
-      .sort((left, right) => safeText(left).length - safeText(right).length);
-    for (const node of nodes) {
-      const names = pendingReviewNamesFromText(safeText(node));
-      if (!names.length) continue;
-      const reviewUrl = reviewUrlFromElement(node);
-      names.forEach((name) => add(name, reviewUrl));
+    const nodes = [...root.querySelectorAll('a[href], button, [role="button"], li, section, div, p, span')]
+      .map((node) => ({ node, text: safeText(node), names: pendingReviewNamesFromText(safeText(node)) }))
+      .filter((item) => item.names.length)
+      .sort((left, right) => left.text.length - right.text.length);
+
+    for (const item of nodes) {
+      const reviewUrl = reviewUrlFromElement(item.node);
+      item.names.forEach((name) => add(name, reviewUrl));
     }
 
-    // O texto completo serve apenas para recuperar nomes que não apareceram em
-    // um bloco individual. Ele nunca fornece um link genérico para todos.
-    pendingReviewNamesFromText(safeText(article)).forEach((name) => add(name, '', 'article-text'));
+    pendingReviewNamesFromText(safeText(root)).forEach((name) => add(name, '', 'root-text'));
     if (found.size) return [...found.values()];
 
-    // Compatibilidade conservadora com a tela antiga: só aceita o avatar quando existe
-    // um único passageiro na viagem. Nunca transforma todos os avatares da viagem em fila.
-    const articleText = safeText(article);
-    if (!hasPendingReviewLabel(articleText) || hasCompletedReviewLabel(articleText)) return [];
-    const imageNames = unique([...article.querySelectorAll('img[data-testid="multiple-logo"][alt], img[alt]')]
+    const rootText = safeText(root);
+    if (!hasPendingReviewLabel(rootText) || hasCompletedReviewLabel(rootText)) return [];
+    const imageNames = unique([...root.querySelectorAll('img[data-testid="multiple-logo"][alt], img[alt]')]
       .map((img) => cleanName(img.getAttribute('alt') || '')).filter(isLikelyPersonName));
     if (imageNames.length === 1) {
-      const action = [...article.querySelectorAll('a[href], button, [role="button"]')]
+      const action = [...root.querySelectorAll('a[href], button, [role="button"]')]
         .find((element) => hasPendingReviewLabel(safeText(element)));
       add(imageNames[0], reviewUrlFromElement(action), 'single-passenger-legacy');
     }
     return [...found.values()];
   };
 
-  const extractTrips = (doc = document) => getTripCards(doc).map((article, index) => {
-    const pendingPassengers = extractPendingReviewPassengers(article);
+  const tripFromRoot = (root, index, idPrefix = 'trip') => {
+    const pendingPassengers = extractPendingReviewPassengers(root);
     if (!pendingPassengers.length) return null;
-    const offerAnchor = article.querySelector('a[href*="/rides/offer"], a[href*="offer?id="]');
-    const offerUrl = absoluteUrl(offerAnchor?.getAttribute('href') || '');
-    const departure = safeText(article.querySelector('[data-testid="e2e-itinerary-departure-station"]'));
-    const arrival = safeText(article.querySelector('[data-testid="e2e-itinerary-arrival-station"]'));
-    const time = safeText(article.querySelector('[data-testid="e2e-itinerary-departure-time"]'));
-    const date = safeText(article.querySelector('h2, h3'));
+    const offerAnchor = root.querySelector?.('a[href*="/rides/offer"], a[href*="offer?id="]');
+    const offerUrl = absoluteUrl(offerAnchor?.getAttribute('href') || (idPrefix === 'page' ? location.href : ''));
+    const departure = safeText(root.querySelector?.('[data-testid="e2e-itinerary-departure-station"]'));
+    const arrival = safeText(root.querySelector?.('[data-testid="e2e-itinerary-arrival-station"]'));
+    const time = safeText(root.querySelector?.('[data-testid="e2e-itinerary-departure-time"]'));
+    const date = safeText(root.querySelector?.('h2, h3'));
     return {
-      id: offerUrl || `trip-${index}-${date}-${time}`,
+      id: offerUrl || `${idPrefix}-${index}-${date}-${time}-${location.pathname}`,
       offerId: offerIdFromUrl(offerUrl),
       date, time, origin: departure, destination: arrival,
       offerUrl,
@@ -253,7 +254,26 @@
       passengers: pendingPassengers.map((item) => item.name),
       pendingPassengers
     };
-  }).filter(Boolean);
+  };
+
+  const extractTrips = (doc = document) => {
+    const trips = getTripCards(doc).map((article, index) => tripFromRoot(article, index)).filter(Boolean);
+    const existing = new Set(trips.flatMap((trip) => trip.pendingPassengers.map((item) => normalize(item.name))));
+    const pagePassengers = extractPendingReviewPassengers(doc.body || doc.documentElement)
+      .filter((item) => !existing.has(normalize(item.name)));
+    if (pagePassengers.length) {
+      trips.push({
+        id: `page-${location.href}`,
+        offerId: offerIdFromUrl(location.href),
+        date: safeText(doc.querySelector('h1, h2')),
+        time: '', origin: '', destination: '', offerUrl: location.href,
+        reviewUrl: pagePassengers.find((item) => item.reviewUrl)?.reviewUrl || '',
+        passengers: pagePassengers.map((item) => item.name),
+        pendingPassengers: pagePassengers
+      });
+    }
+    return trips;
+  };
 
   const passengerKey = (trip, name) => `${trip.id}::${normalize(name)}`;
   const buildPassengerQueue = (trips) => {
@@ -282,4 +302,3 @@
     }
     return queue;
   };
-
