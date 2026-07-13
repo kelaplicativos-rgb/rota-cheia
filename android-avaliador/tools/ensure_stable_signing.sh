@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 KEYSTORE_DIR="$ROOT_DIR/keystore"
 KEYSTORE_FILE="$KEYSTORE_DIR/rotaai-internal-update.jks"
-KEYSTORE_ALIAS="rotaai-update"
-KEYSTORE_PASSWORD="RotaAiUpdate2026!"
+KEYSTORE_ALIAS="androiddebugkey"
+KEYSTORE_PASSWORD="android"
 ARTIFACT_NAME="rotaai-signing-key"
 
 mkdir -p "$KEYSTORE_DIR"
