@@ -1,9 +1,10 @@
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
 
-const asset = path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'rotaai.js');
-const source = zlib.gunzipSync(Buffer.from(fs.readFileSync(asset, 'utf8').trim(), 'base64')).toString('utf8');
+const assets = path.join(__dirname, '..', 'app', 'src', 'main', 'assets');
+const source = [1, 2, 3, 4]
+  .map((part) => fs.readFileSync(path.join(assets, `rotaai-part${part}.js`), 'utf8'))
+  .join('\n');
 global.window = global;
 global.__ROTA_AI_TEST_ONLY__ = true;
 eval(source);
