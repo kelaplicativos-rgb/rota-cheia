@@ -1,0 +1,163 @@
+name: Build RotaAi Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/rotaai-android-avaliacoes
+    paths:
+      - "android-avaliador/**"
+      - ".github/workflows/build-rotaai-android.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "android-avaliador/**"
+      - ".github/workflows/build-rotaai-android.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Restore or create stable signing key
+        working-directory: android-avaliador
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x tools/ensure_stable_signing.sh
+          tools/ensure_stable_signing.sh
+
+      - name: Preserve stable signing key
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotaai-signing-key
+          path: android-avaliador/keystore/rotaai-internal-update.jks
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Configure Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Apply automation safety patches
+        working-directory: android-avaliador
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tools/patch_automation.py')
+          source = path.read_text(encoding='utf-8')
+          source = source.replace(
+              '    "  const pendingActionCandidates = (passengerName = \'\') => {",\n    "  const startSmartReview =",',
+              '    "  const findFirstPendingAction = () => {",\n    "  const startSmartReview =",'
+          )
+          path.write_text(source, encoding='utf-8')
+          PY
+          python tools/patch_automation.py
+          python tools/patch_dynamic_retry.py
+          python tools/patch_rating_flow.py
+          python tools/patch_note_rating_buttons.py
+          python tools/patch_publication_flow.py
+          python tools/patch_no_reviews.py
+          python tools/patch_native_version.py
+          sed -i "s/'0.4.0'/'0.6.6'/g; s/'0.5.0'/'0.6.6'/g; s/'0.6.1'/'0.6.6'/g; s/'0.6.2'/'0.6.6'/g; s/'0.6.3'/'0.6.6'/g; s/'0.6.4'/'0.6.6'/g; s/'0.6.5'/'0.6.6'/g" app/src/main/assets/rotaai-part*.js
+
+      - name: Assemble and check RotaAi automation
+        working-directory: android-avaliador
+        run: |
+          mkdir -p decoded
+          cat app/src/main/assets/rotaai-part1.js \
+              app/src/main/assets/rotaai-part2.js \
+              app/src/main/assets/rotaai-part3.js \
+              app/src/main/assets/rotaai-part4.js \
+              app/src/main/assets/rotaai-part5-debug.js > decoded/rotaai.js
+          node --check decoded/rotaai.js
+          node --check app/src/main/assets/generator.js
+          grep -q "trip-summary-v2" app/src/main/assets/rotaai-part2.js
+          grep -q "exact-rating-v2" app/src/main/assets/rotaai-part4.js
+          grep -q "same_rating_flow_kept" app/src/main/assets/rotaai-part4.js
+          grep -q "rating_flow_wait" app/src/main/assets/rotaai-part3.js
+          grep -q "semantic_rating_button" app/src/main/assets/rotaai-part3.js
+          grep -q "semantic_rating_click_locked" app/src/main/assets/rotaai-part3.js
+          grep -q "publicationPathStep" app/src/main/assets/rotaai-part4.js
+          grep -q "currentFlow !== targetFlow" app/src/main/assets/rotaai-part4.js
+          grep -q '/user/show/${participantId}/reviews' app/src/main/assets/rotaai-part2.js
+          grep -q "profile_without_reviews_allowed" app/src/main/assets/rotaai-part2.js
+          grep -q "profile_without_reviews" app/src/main/assets/generator.js
+          grep -q "Aguardando o resumo carregar" app/src/main/assets/rotaai-part2.js
+          grep -q "stopAll" app/src/main/assets/rotaai-part5-debug.js
+          grep -q "0.6.6" app/src/main/assets/rotaai-part5-debug.js
+          grep -q "BuildConfig.VERSION_NAME" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
+          grep -q "Exportar log" app/src/main/java/br/com/rotaai/avaliador/MainActivity.java
+          grep -q "signingConfig signingConfigs.stableInternal" app/build.gradle
+          grep -q "versionCode 600000 + ciRunNumber" app/build.gradle
+
+      - name: Test pending passenger filter
+        working-directory: android-avaliador
+        run: node tests/pending-review-filter.test.js
+
+      - name: Test exact rating selector safety
+        working-directory: android-avaliador
+        run: node tests/selector-safety.test.js
+
+      - name: Test rating flow loop protection
+        working-directory: android-avaliador
+        run: node tests/rating-flow-loop.test.js
+
+      - name: Test textual note buttons
+        working-directory: android-avaliador
+        run: node tests/note-rating-buttons.test.js
+
+      - name: Test publication state machine
+        working-directory: android-avaliador
+        run: node tests/publication-flow-state.test.js
+
+      - name: Test passenger without reviews
+        working-directory: android-avaliador
+        run: node tests/profile-without-reviews.test.js
+
+      - name: Test casual review generator
+        working-directory: android-avaliador
+        run: node tests/generator-casual.test.js
+
+      - name: Build update-compatible APK
+        working-directory: android-avaliador
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK archive and signature
+        working-directory: android-avaliador
+        run: |
+          unzip -t app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/debug/app-debug.apk | tee decoded/apk-signing.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" decoded/apk-signing.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rotaai-avaliador-android
+          path: android-avaliador/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
