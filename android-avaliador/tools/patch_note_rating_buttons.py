@@ -55,7 +55,7 @@ if field_rating not in part4:
 part4 = part4.replace(field_rating, "      clickRatingChoice(Number(passenger.rating));", 1)
 
 old_publish_rating = "    const ratingOnly = clickRating(Number(passenger.rating));\n    if (ratingOnly) {"
-new_publish_rating = "    const ratingPathBefore = location.pathname;\n    const ratingOnly = clickRatingChoice(Number(passenger.rating));\n    if (ratingOnly && location.pathname !== ratingPathBefore) {\n      state.publish.attempts = 0;\n      state.publish.lastActionAt = 0;\n      state.publish.stage = 'rating-selected';\n      state.status = `Nota de ${passenger.name} selecionada. Abrindo o comentário...`;\n      notifyNative(state.status); saveState(); render();\n      return;\n    }\n    if (ratingOnly) {"
+new_publish_rating = "    const ratingPathBefore = location.pathname;\n    const ratingOnly = clickRatingChoice(Number(passenger.rating));\n    if (ratingOnly && location.pathname !== ratingPathBefore) {\n      state.publish.attempts = 0;\n      state.publish.lastActionAt = 0;\n      state.publish.stage = 'rating-selected';\n      state.status = `Nota de ${passenger.name} selecionada. Abrindo o comentário...`;\n      notifyNative(state.status); saveState(); render();\n      setTimeout(() => {\n        if (state.publish.active && currentPublishingPassenger()?.key === passenger.key) processPublication(true);\n      }, 650);\n      return;\n    }\n    if (ratingOnly) {"
 if old_publish_rating not in part4:
     raise RuntimeError("Seleção de nota da publicação não encontrada")
 part4 = part4.replace(old_publish_rating, new_publish_rating, 1)
