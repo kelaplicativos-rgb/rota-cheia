@@ -16,7 +16,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode 600000 + ciRunNumber
-        versionName '0.6.5'
+        versionName '0.6.6'
     }
 
     buildFeatures {
